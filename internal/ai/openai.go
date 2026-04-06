@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"dawnmagnet.top/m/aicomiter/internal/config"
@@ -130,5 +131,11 @@ func (c *OpenAIClient) GenerateCommitMessage(ctx context.Context, diff, language
 		return "", fmt.Errorf("no response from OpenAI")
 	}
 
-	return oaiResp.Choices[0].Message.Content, nil
+	message := strings.TrimSpace(oaiResp.Choices[0].Message.Content)
+	// Remove markdown code block markers if present
+	message = strings.TrimPrefix(message, "```")
+	message = strings.TrimSuffix(message, "```")
+	message = strings.TrimSpace(message)
+
+	return message, nil
 }

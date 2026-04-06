@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"dawnmagnet.top/m/aicomiter/internal/config"
@@ -129,5 +130,11 @@ func (c *AnthropicClient) GenerateCommitMessage(ctx context.Context, diff, langu
 		return "", fmt.Errorf("no response from Anthropic")
 	}
 
-	return antResp.Content[0].Text, nil
+	message := strings.TrimSpace(antResp.Content[0].Text)
+	// Remove markdown code block markers if present
+	message = strings.TrimPrefix(message, "```")
+	message = strings.TrimSuffix(message, "```")
+	message = strings.TrimSpace(message)
+
+	return message, nil
 }
