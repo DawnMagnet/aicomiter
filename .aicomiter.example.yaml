@@ -1,0 +1,128 @@
+# aicomiter configuration file
+# Copy this to ~/.aicomiter.yaml and fill in your API key
+#
+# Configuration Priority (highest to lowest):
+# 1. Command line flags (e.g., --api-key, --provider)
+# 2. Environment variables (e.g., AICOMITER_AI_API_KEY)
+# 3. Configuration file (this file)
+# 4. Default values
+
+# ============== AI Provider Configuration ==============
+ai:
+  # Provider: openai or anthropic
+  # Can be set via:
+  # - Command line: --provider openai
+  # - Environment: AICOMITER_AI_PROVIDER=openai
+  provider: openai
+
+  # API key for the provider
+  # Can be set via:
+  # - Command line: --api-key sk-xxx
+  # - Environment: AICOMITER_AI_API_KEY=sk-xxx or API_KEY=sk-xxx (deprecated)
+  api_key: sk-your-api-key-here
+
+  # Base URL for the API endpoint (optional)
+  # If not set, uses provider default:
+  # - OpenAI: https://api.openai.com/v1
+  # - Anthropic: https://api.anthropic.com/v1
+  # Useful for using proxies or compatible services
+  # Can be set via:
+  # - Command line: --base-url https://api.openai.com/v1
+  # - Environment: AICOMITER_AI_BASE_URL=https://api.openai.com/v1
+  # base_url: https://api.openai.com/v1
+
+  # Model name (optional)
+  # If not set, uses provider default:
+  # - OpenAI: gpt-4o-mini
+  # - Anthropic: claude-3-5-sonnet-20241022
+  # Can be set via:
+  # - Command line: --model gpt-4o-mini
+  # - Environment: AICOMITER_AI_MODEL=gpt-4o-mini
+  # model: gpt-4o-mini
+
+  # Temperature: controls randomness (0-2)
+  # Lower values (0-0.5) = more deterministic
+  # Higher values (1-2) = more creative/random
+  # Default: 0.7
+  # Can be set via:
+  # - Command line: --temperature 0.7
+  # - Environment: AICOMITER_AI_TEMPERATURE=0.7
+  temperature: 0.7
+
+  # Top-P: nucleus sampling (0-1)
+  # Controls diversity via cumulative probability
+  # Default: 1.0
+  # Can be set via:
+  # - Command line: --top-p 1.0
+  # - Environment: AICOMITER_AI_TOP_P=1.0
+  top_p: 1.0
+
+  # Max tokens: maximum length of response
+  # Default: 500
+  # Can be set via:
+  # - Command line: --max-tokens 500
+  # - Environment: AICOMITER_AI_MAX_TOKENS=500
+  max_tokens: 500
+
+  # Request timeout in seconds
+  # Default: 30
+  # Can be set via:
+  # - Command line: --timeout 30
+  # - Environment: AICOMITER_AI_TIMEOUT=30
+  timeout: 30
+
+# ============== Generate Configuration ==============
+generate:
+  # Language for commit message
+  # Supported: en (English), zh (Chinese), etc.
+  # Default: en
+  # Can be set via:
+  # - Command line: --language zh or -l zh
+  # - Environment: AICOMITER_GENERATE_LANGUAGE=zh
+  language: en
+
+  # Number of commit message suggestions to generate
+  # Default: 1
+  # Can be set via:
+  # - Command line: --count 5 or -c 5
+  # - Environment: AICOMITER_GENERATE_COUNT=5
+  count: 1
+
+# ============== Examples ==============
+#
+# OpenAI Configuration:
+# ai:
+#   provider: openai
+#   api_key: sk-proj-xxx
+#   model: gpt-4o-mini
+#   temperature: 0.7
+#   top_p: 1.0
+#   max_tokens: 500
+#   timeout: 30
+#
+# Anthropic Configuration:
+# ai:
+#   provider: anthropic
+#   api_key: sk-ant-xxx
+#   model: claude-3-5-sonnet-20241022
+#   temperature: 1.0
+#   top_p: 1.0
+#   max_tokens: 500
+#   timeout: 30
+#
+# Using a proxy/compatible service:
+# ai:
+#   provider: openai
+#   api_key: sk-xxx
+#   base_url: https://your-proxy.com/v1
+#   model: gpt-4o-mini
+#
+# Chinese output:
+# generate:
+#   language: zh
+#   count: 1
+#
+# Multiple suggestions:
+# generate:
+#   language: en
+#   count: 5
