@@ -4,6 +4,7 @@ const Config = @import("config.zig").Config;
 const CLI = @import("cli.zig").CLI;
 const Git = @import("git.zig").Git;
 const AI = @import("ai.zig").AI;
+const util = @import("util.zig");
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
@@ -198,3 +199,12 @@ fn printHelp() !void {
 pub const std_options: std.Options = .{
     .log_level = .info,
 };
+
+test "reference tests" {
+    std.testing.refAllDecls(@This());
+    _ = Config;
+    _ = CLI;
+    _ = Git;
+    _ = AI;
+    _ = util;
+}

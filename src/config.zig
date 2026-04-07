@@ -21,32 +21,34 @@ pub const Config = struct {
     ai: AIConfig = .{},
     generate: GenerateConfig = .{},
     allocator: std.mem.Allocator,
+    arena: *std.heap.ArenaAllocator,
     config_file: ?[]const u8 = null,
 
     const Self = @This();
 
     pub fn load(allocator: std.mem.Allocator) !Self {
+        var arena = try allocator.create(std.heap.ArenaAllocator);
+        arena.* = std.heap.ArenaAllocator.init(allocator);
         var self = Self{
             .allocator = allocator,
+            .arena = arena,
         };
+        const aa = arena.allocator();
 
         // Load from config file first
-        if (std.process.getEnvVarOwned(allocator, "HOME")) |home_dir| {
-            defer allocator.free(home_dir);
-            const config_path = try std.fmt.allocPrint(allocator, "{s}/.aicomiter.yaml", .{home_dir});
-            defer allocator.free(config_path);
+        if (std.process.getEnvVarOwned(aa, "HOME")) |home_dir| {
+            const config_path = try std.fmt.allocPrint(aa, "{s}/.aicomiter.yaml", .{home_dir});
 
             if (std.fs.openFileAbsolute(config_path, .{})) |file| {
                 defer file.close();
-                const content = try file.readToEndAlloc(allocator, 1024 * 100);
-                defer allocator.free(content);
-
+                self.config_file = config_path;
+                const content = try file.readToEndAlloc(aa, 1024 * 100);
                 try self.parseYaml(content);
             } else |_| {}
         } else |_| {}
 
         // Load from environment variables
-        self.loadFromEnv(allocator);
+        self.loadFromEnv(aa);
 
         return self;
     }
@@ -92,29 +94,40 @@ pub const Config = struct {
         }
     }
 
-    fn loadFromEnv(self: *Self, allocator: std.mem.Allocator) void {
-        if (std.process.getEnvVarOwned(allocator, "AICOMITER_AI_API_KEY")) |val| {
-            defer allocator.free(val);
+    fn loadFromEnv(self: *Self, aa: std.mem.Allocator) void {
+        if (std.process.getEnvVarOwned(aa, "AICOMITER_AI_PROVIDER")) |val| {
+            self.ai.provider = val;
+        } else |_| {}
+
+        if (std.process.getEnvVarOwned(aa, "AICOMITER_AI_API_KEY")) |val| {
             self.ai.api_key = val;
-        } else |_| {}
+        } else |_| {
+            if (std.process.getEnvVarOwned(aa, "API_KEY")) |val| {
+                self.ai.api_key = val;
+            } else |_| {}
+        }
 
-        if (std.process.getEnvVarOwned(allocator, "API_KEY")) |val| {
-            defer allocator.free(val);
-            self.ai.api_key = val;
-        } else |_| {}
+        if (std.process.getEnvVarOwned(aa, "AICOMITER_AI_BASE_URL")) |val| {
+            self.ai.base_url = val;
+        } else |_| {
+            if (std.process.getEnvVarOwned(aa, "OPENAI_API_BASE")) |val| {
+                self.ai.base_url = val;
+            } else |_| {
+                if (std.process.getEnvVarOwned(aa, "API_BASE_URL")) |val| {
+                    self.ai.base_url = val;
+                } else |_| {}
+            }
+        }
 
-        if (std.process.getEnvVarOwned(allocator, "AICOMITER_AI_MODEL")) |val| {
-            defer allocator.free(val);
+        if (std.process.getEnvVarOwned(aa, "AICOMITER_AI_MODEL")) |val| {
             self.ai.model = val;
-        } else |_| {}
+        } else |_| {
+            if (std.process.getEnvVarOwned(aa, "MODEL")) |val| {
+                self.ai.model = val;
+            } else |_| {}
+        }
 
-        if (std.process.getEnvVarOwned(allocator, "MODEL")) |val| {
-            defer allocator.free(val);
-            self.ai.model = val;
-        } else |_| {}
-
-        if (std.process.getEnvVarOwned(allocator, "AICOMITER_GENERATE_LANGUAGE")) |val| {
-            defer allocator.free(val);
+        if (std.process.getEnvVarOwned(aa, "AICOMITER_GENERATE_LANGUAGE")) |val| {
             self.generate.language = val;
         } else |_| {}
     }
@@ -182,6 +195,38 @@ pub const Config = struct {
     }
 
     pub fn deinit(self: *Self) void {
-        _ = self;
+        self.arena.deinit();
+        self.allocator.destroy(self.arena);
     }
 };
+
+test "config - applyCliOverrides" {
+    const testing = std.testing;
+    const allocator = testing.allocator;
+
+    const arena = try allocator.create(std.heap.ArenaAllocator);
+    arena.* = std.heap.ArenaAllocator.init(allocator);
+
+    var config = Config{
+        .allocator = allocator,
+        .arena = arena,
+    };
+    defer config.deinit();
+
+    const cli = CLI{
+        .command = "gen",
+        .format = "text",
+        .api_key = "test_key",
+        .provider = "anthropic",
+        .temperature = 0.5,
+        .count = 5,
+        .all = true,
+    };
+
+    config.applyCliOverrides(cli);
+
+    try testing.expectEqualStrings("test_key", config.ai.api_key);
+    try testing.expectEqualStrings("anthropic", config.ai.provider);
+    try testing.expectEqual(0.5, config.ai.temperature);
+    try testing.expectEqual(5, config.generate.count);
+}

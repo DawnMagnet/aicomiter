@@ -136,3 +136,14 @@ pub const CLI = struct {
         allocator.free(self.format);
     }
 };
+
+test "CLI - default instantiation" {
+    const cli = CLI{
+        .command = "help",
+        .format = "text",
+    };
+    try std.testing.expectEqualStrings("help", cli.command);
+    try std.testing.expectEqualStrings("text", cli.format);
+    try std.testing.expect(cli.api_key == null);
+    try std.testing.expect(cli.temperature == null);
+}

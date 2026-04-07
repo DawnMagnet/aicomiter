@@ -76,3 +76,14 @@ pub const Git = struct {
         }
     }
 };
+
+test "Git - initialization" {
+    const testing = std.testing;
+    const allocator = testing.allocator;
+
+    const git = Git.init(allocator);
+    defer git.deinit();
+
+    // Just verifying struct is formed properly.
+    try testing.expect(@TypeOf(git.allocator) == std.mem.Allocator);
+}
