@@ -26,7 +26,7 @@ pkgs.stdenv.mkDerivation {
 
     # 使用 ReleaseSafe 优化构建，并将它直接安装到 Nix 构建输出目录的 $out，
     # 其中 --prefix $out 会自动创建 $out/bin 并放入生成的可执行文件。
-    zig build -Doptimize=ReleaseSafe --prefix $out
+    zig build -Doptimize=ReleaseSmall --prefix $out
 
     runHook postBuild
   '';
