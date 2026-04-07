@@ -3,6 +3,8 @@ const std = @import("std");
 pub const Git = struct {
     allocator: std.mem.Allocator,
 
+    const max_diff_size = 1024 * 1024;
+
     pub fn init(allocator: std.mem.Allocator) Git {
         return .{
             .allocator = allocator,
@@ -14,37 +16,22 @@ pub const Git = struct {
     }
 
     pub fn getStagedDiff(self: Git) ![]const u8 {
-        var child = std.process.Child.init(&.{ "git", "diff", "--cached" }, self.allocator);
-        child.stdout_behavior = .Pipe;
-        child.stderr_behavior = .Pipe;
-
-        try child.spawn();
-        defer _ = child.wait() catch {};
-
-        const stdout = child.stdout orelse return error.NoStdout;
-        const diff = try stdout.readToEndAlloc(self.allocator, 1024 * 1024);
-
-        return diff;
+        return try self.runCaptureChecked(&.{ "git", "diff", "--cached" }, max_diff_size, error.GitDiffFailed);
     }
 
     pub fn stageAll(self: Git) !void {
-        var child = std.process.Child.init(&.{ "git", "add", "-A" }, self.allocator);
-        child.stdout_behavior = .Inherit;
-        child.stderr_behavior = .Inherit;
-
-        try child.spawn();
-        const term = try child.wait();
-
-        switch (term) {
-            .Exited => |code| {
-                if (code != 0) return error.GitStageFailed;
-            },
-            else => return error.GitStageFailed,
-        }
+        try self.runChecked(&.{ "git", "add", "-A" }, error.GitStageFailed);
     }
 
     pub fn commit(self: Git, message: []const u8) !void {
-        const argv = &.{ "git", "commit", "-m", message };
+        try self.runChecked(&.{ "git", "commit", "-m", message }, error.GitCommitFailed);
+    }
+
+    pub fn push(self: Git) !void {
+        try self.runChecked(&.{ "git", "push" }, error.GitPushFailed);
+    }
+
+    fn runChecked(self: Git, argv: []const []const u8, failure: anyerror) !void {
         var child = std.process.Child.init(argv, self.allocator);
         child.stdout_behavior = .Inherit;
         child.stderr_behavior = .Inherit;
@@ -53,27 +40,34 @@ pub const Git = struct {
         const term = try child.wait();
 
         switch (term) {
-            .Exited => |code| {
-                if (code != 0) return error.GitCommitFailed;
-            },
-            else => return error.GitCommitFailed,
+            .Exited => |code| if (code != 0) return failure,
+            else => return failure,
         }
     }
 
-    pub fn push(self: Git) !void {
-        var child = std.process.Child.init(&.{ "git", "push" }, self.allocator);
-        child.stdout_behavior = .Inherit;
-        child.stderr_behavior = .Inherit;
+    fn runCaptureChecked(self: Git, argv: []const []const u8, max_bytes: usize, failure: anyerror) ![]const u8 {
+        var child = std.process.Child.init(argv, self.allocator);
+        child.stdout_behavior = .Pipe;
+        child.stderr_behavior = .Pipe;
 
         try child.spawn();
-        const term = try child.wait();
 
+        const stdout = child.stdout orelse return error.NoStdout;
+        const output = try stdout.readToEndAlloc(self.allocator, max_bytes);
+
+        const term = try child.wait();
         switch (term) {
-            .Exited => |code| {
-                if (code != 0) return error.GitPushFailed;
+            .Exited => |code| if (code != 0) {
+                self.allocator.free(output);
+                return failure;
             },
-            else => return error.GitPushFailed,
+            else => {
+                self.allocator.free(output);
+                return failure;
+            },
         }
+
+        return output;
     }
 };
 

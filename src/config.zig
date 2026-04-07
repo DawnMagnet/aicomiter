@@ -26,6 +26,9 @@ pub const Config = struct {
 
     const Self = @This();
 
+    const ai_fields = std.meta.fields(AIConfig);
+    const generate_fields = std.meta.fields(GenerateConfig);
+
     pub fn load(allocator: std.mem.Allocator) !Self {
         var arena = try allocator.create(std.heap.ArenaAllocator);
         arena.* = std.heap.ArenaAllocator.init(allocator);
@@ -60,76 +63,17 @@ pub const Config = struct {
             const trimmed = std.mem.trim(u8, line, " \t");
             if (trimmed.len == 0 or std.mem.startsWith(u8, trimmed, "#")) continue;
 
-            if (std.mem.startsWith(u8, trimmed, "provider:")) {
-                const value = std.mem.trim(u8, trimmed[9..], " \t\"");
-                self.ai.provider = value;
-            } else if (std.mem.startsWith(u8, trimmed, "api_key:")) {
-                const value = std.mem.trim(u8, trimmed[8..], " \t\"");
-                self.ai.api_key = value;
-            } else if (std.mem.startsWith(u8, trimmed, "base_url:")) {
-                const value = std.mem.trim(u8, trimmed[9..], " \t\"");
-                self.ai.base_url = value;
-            } else if (std.mem.startsWith(u8, trimmed, "model:")) {
-                const value = std.mem.trim(u8, trimmed[6..], " \t\"");
-                self.ai.model = value;
-            } else if (std.mem.startsWith(u8, trimmed, "temperature:")) {
-                const value = std.mem.trim(u8, trimmed[12..], " \t");
-                self.ai.temperature = try std.fmt.parseFloat(f32, value);
-            } else if (std.mem.startsWith(u8, trimmed, "top_p:")) {
-                const value = std.mem.trim(u8, trimmed[6..], " \t");
-                self.ai.top_p = try std.fmt.parseFloat(f32, value);
-            } else if (std.mem.startsWith(u8, trimmed, "max_tokens:")) {
-                const value = std.mem.trim(u8, trimmed[11..], " \t");
-                self.ai.max_tokens = try std.fmt.parseInt(i32, value, 10);
-            } else if (std.mem.startsWith(u8, trimmed, "timeout:")) {
-                const value = std.mem.trim(u8, trimmed[8..], " \t");
-                self.ai.timeout = try std.fmt.parseInt(i32, value, 10);
-            } else if (std.mem.startsWith(u8, trimmed, "language:")) {
-                const value = std.mem.trim(u8, trimmed[9..], " \t\"");
-                self.generate.language = value;
-            } else if (std.mem.startsWith(u8, trimmed, "count:")) {
-                const value = std.mem.trim(u8, trimmed[6..], " \t");
-                self.generate.count = try std.fmt.parseInt(i32, value, 10);
-            }
+            if (try applyFieldToStruct(AIConfig, &self.ai, ai_fields, trimmed)) continue;
+            _ = try applyFieldToStruct(GenerateConfig, &self.generate, generate_fields, trimmed);
         }
     }
 
     fn loadFromEnv(self: *Self, aa: std.mem.Allocator) void {
-        if (std.process.getEnvVarOwned(aa, "AICOMITER_AI_PROVIDER")) |val| {
-            self.ai.provider = val;
-        } else |_| {}
-
-        if (std.process.getEnvVarOwned(aa, "AICOMITER_AI_API_KEY")) |val| {
-            self.ai.api_key = val;
-        } else |_| {
-            if (std.process.getEnvVarOwned(aa, "API_KEY")) |val| {
-                self.ai.api_key = val;
-            } else |_| {}
-        }
-
-        if (std.process.getEnvVarOwned(aa, "AICOMITER_AI_BASE_URL")) |val| {
-            self.ai.base_url = val;
-        } else |_| {
-            if (std.process.getEnvVarOwned(aa, "OPENAI_API_BASE")) |val| {
-                self.ai.base_url = val;
-            } else |_| {
-                if (std.process.getEnvVarOwned(aa, "API_BASE_URL")) |val| {
-                    self.ai.base_url = val;
-                } else |_| {}
-            }
-        }
-
-        if (std.process.getEnvVarOwned(aa, "AICOMITER_AI_MODEL")) |val| {
-            self.ai.model = val;
-        } else |_| {
-            if (std.process.getEnvVarOwned(aa, "MODEL")) |val| {
-                self.ai.model = val;
-            } else |_| {}
-        }
-
-        if (std.process.getEnvVarOwned(aa, "AICOMITER_GENERATE_LANGUAGE")) |val| {
-            self.generate.language = val;
-        } else |_| {}
+        applyFirstEnvValue(aa, &self.ai.api_key, &.{ "AICOMITER_AI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "API_KEY" });
+        applyFirstEnvValue(aa, &self.ai.base_url, &.{ "AICOMITER_AI_BASE_URL", "OPENAI_API_BASE", "API_BASE_URL" });
+        applyFirstEnvValue(aa, &self.ai.provider, &.{"AICOMITER_AI_PROVIDER"});
+        applyFirstEnvValue(aa, &self.ai.model, &.{ "AICOMITER_AI_MODEL", "MODEL" });
+        applyFirstEnvValue(aa, &self.generate.language, &.{"AICOMITER_GENERATE_LANGUAGE"});
     }
 
     pub fn applyCliOverrides(self: *Self, cli: CLI) void {
@@ -197,6 +141,40 @@ pub const Config = struct {
     pub fn deinit(self: *Self) void {
         self.arena.deinit();
         self.allocator.destroy(self.arena);
+    }
+
+    fn applyFirstEnvValue(aa: std.mem.Allocator, target: *[]const u8, names: []const []const u8) void {
+        for (names) |name| {
+            if (std.process.getEnvVarOwned(aa, name)) |value| {
+                target.* = value;
+                return;
+            } else |_| {}
+        }
+    }
+
+    fn applyFieldToStruct(
+        comptime T: type,
+        target: *T,
+        comptime fields: []const std.builtin.Type.StructField,
+        line: []const u8,
+    ) !bool {
+        inline for (fields) |field| {
+            const prefix = field.name ++ ":";
+            if (std.mem.startsWith(u8, line, prefix)) {
+                const raw = std.mem.trim(u8, line[prefix.len..], " \t\"");
+                @field(target, field.name) = try parseScalar(field.type, raw);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    fn parseScalar(comptime T: type, raw: []const u8) !T {
+        if (T == []const u8) return raw;
+        if (T == f32) return try std.fmt.parseFloat(f32, raw);
+        if (T == i32) return try std.fmt.parseInt(i32, raw, 10);
+        @compileError("Unsupported scalar type in config parser");
     }
 };
 

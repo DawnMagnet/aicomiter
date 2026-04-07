@@ -5,6 +5,8 @@ pub const AI = struct {
     allocator: std.mem.Allocator,
     config: Config,
 
+    const system_prompt = "You are an expert developer. Generate a concise, conventional git commit message based on the diff. Do not explain, just return the commit message.";
+
     pub fn init(allocator: std.mem.Allocator, config: Config) !AI {
         return .{
             .allocator = allocator,
@@ -29,16 +31,7 @@ pub const AI = struct {
         else
             "gpt-4o-mini";
 
-        var client: std.http.Client = .{ .allocator = self.allocator };
-        defer client.deinit();
-
-        var aw: std.io.Writer.Allocating = .init(self.allocator);
-        defer aw.deinit();
-
-        var base_url = if (self.config.ai.base_url.len > 0) self.config.ai.base_url else "https://api.openai.com/v1";
-        if (std.mem.endsWith(u8, base_url, "/")) {
-            base_url = base_url[0 .. base_url.len - 1];
-        }
+        const base_url = normalizeBaseUrl(self.config.ai.base_url, "https://api.openai.com/v1");
 
         const url = try std.fmt.allocPrint(self.allocator, "{s}/chat/completions", .{base_url});
         defer self.allocator.free(url);
@@ -46,7 +39,7 @@ pub const AI = struct {
         const auth_header = try std.fmt.allocPrint(self.allocator, "Bearer {s}", .{self.config.ai.api_key});
         defer self.allocator.free(auth_header);
 
-        const user_prompt = try std.fmt.allocPrint(self.allocator, "Language: {s}\nDiff:\n{s}", .{ language, diff });
+        const user_prompt = try buildUserPrompt(self.allocator, language, diff);
         defer self.allocator.free(user_prompt);
 
         var payload_aw: std.io.Writer.Allocating = .init(self.allocator);
@@ -58,7 +51,7 @@ pub const AI = struct {
             .messages = &[_]struct { role: []const u8, content: []const u8 }{
                 .{
                     .role = "system",
-                    .content = "You are an expert developer. Generate a concise, conventional git commit message based on the diff. Do not explain, just return the commit message.",
+                    .content = system_prompt,
                 },
                 .{
                     .role = "user",
@@ -71,28 +64,15 @@ pub const AI = struct {
             .n = count,
         });
 
-        const res = try client.fetch(.{
-            .location = .{ .url = url },
-            .method = .POST,
-            .payload = payload_aw.writer.buffered(),
-            .extra_headers = &.{
-                .{ .name = "Authorization", .value = auth_header },
-                .{ .name = "Content-Type", .value = "application/json" },
-            },
-            .response_writer = &aw.writer,
-        });
+        const headers = [_]std.http.Header{
+            .{ .name = "Authorization", .value = auth_header },
+            .{ .name = "Content-Type", .value = "application/json" },
+        };
 
-        if (res.status != .ok) {
-            std.debug.print("API Error ({}): {s}\n", .{ res.status, aw.writer.buffered() });
-            return error.ApiRequestFailed;
-        }
+        const response_body = try self.fetchJson(url, headers[0..], payload_aw.writer.buffered());
+        defer self.allocator.free(response_body);
 
-        var parsed = try std.json.parseFromSlice(std.json.Value, self.allocator, aw.writer.buffered(), .{});
-        defer parsed.deinit();
-
-        const root = parsed.value;
-        const msg = root.object.get("choices").?.array.items[0].object.get("message").?.object.get("content").?.string;
-        return try self.allocator.dupe(u8, msg);
+        return try parseOpenAIResponse(self.allocator, response_body);
     }
 
     fn generateAnthropic(self: *AI, diff: []const u8, language: []const u8, count: i32) ![]const u8 {
@@ -103,24 +83,12 @@ pub const AI = struct {
 
         _ = count; // Anthropic API does not support n (multiple generations) the same way
 
-        var client: std.http.Client = .{ .allocator = self.allocator };
-        defer client.deinit();
-
-        var aw: std.io.Writer.Allocating = .init(self.allocator);
-        defer aw.deinit();
-
-        var base_url = if (self.config.ai.base_url.len > 0) self.config.ai.base_url else "https://api.anthropic.com/v1";
-        if (std.mem.endsWith(u8, base_url, "/")) {
-            base_url = base_url[0 .. base_url.len - 1];
-        }
+        const base_url = normalizeBaseUrl(self.config.ai.base_url, "https://api.anthropic.com/v1");
 
         const url = try std.fmt.allocPrint(self.allocator, "{s}/messages", .{base_url});
         defer self.allocator.free(url);
 
-        const api_key = try std.fmt.allocPrint(self.allocator, "{s}", .{self.config.ai.api_key});
-        defer self.allocator.free(api_key);
-
-        const user_prompt = try std.fmt.allocPrint(self.allocator, "Language: {s}\nDiff:\n{s}", .{ language, diff });
+        const user_prompt = try buildUserPrompt(self.allocator, language, diff);
         defer self.allocator.free(user_prompt);
 
         var payload_aw: std.io.Writer.Allocating = .init(self.allocator);
@@ -135,21 +103,48 @@ pub const AI = struct {
                     .content = user_prompt,
                 },
             },
-            .system = "You are an expert developer. Generate a concise, conventional git commit message based on the diff. Do not explain, just return the commit message.",
+            .system = system_prompt,
             .temperature = self.config.ai.temperature,
             .top_p = self.config.ai.top_p,
             .max_tokens = self.config.ai.max_tokens,
         });
 
+        const headers = [_]std.http.Header{
+            .{ .name = "x-api-key", .value = self.config.ai.api_key },
+            .{ .name = "anthropic-version", .value = "2023-06-01" },
+            .{ .name = "Content-Type", .value = "application/json" },
+        };
+
+        const response_body = try self.fetchJson(url, headers[0..], payload_aw.writer.buffered());
+        defer self.allocator.free(response_body);
+
+        return try parseAnthropicResponse(self.allocator, response_body);
+    }
+
+    fn normalizeBaseUrl(config_base_url: []const u8, default_base_url: []const u8) []const u8 {
+        var base_url = if (config_base_url.len > 0) config_base_url else default_base_url;
+        if (std.mem.endsWith(u8, base_url, "/")) {
+            base_url = base_url[0 .. base_url.len - 1];
+        }
+        return base_url;
+    }
+
+    fn buildUserPrompt(allocator: std.mem.Allocator, language: []const u8, diff: []const u8) ![]const u8 {
+        return std.fmt.allocPrint(allocator, "Language: {s}\nDiff:\n{s}", .{ language, diff });
+    }
+
+    fn fetchJson(self: *AI, url: []const u8, headers: []const std.http.Header, payload: []const u8) ![]const u8 {
+        var client: std.http.Client = .{ .allocator = self.allocator };
+        defer client.deinit();
+
+        var aw: std.io.Writer.Allocating = .init(self.allocator);
+        defer aw.deinit();
+
         const res = try client.fetch(.{
             .location = .{ .url = url },
             .method = .POST,
-            .payload = payload_aw.writer.buffered(),
-            .extra_headers = &.{
-                .{ .name = "x-api-key", .value = api_key },
-                .{ .name = "anthropic-version", .value = "2023-06-01" },
-                .{ .name = "Content-Type", .value = "application/json" },
-            },
+            .payload = payload,
+            .extra_headers = headers,
             .response_writer = &aw.writer,
         });
 
@@ -158,12 +153,25 @@ pub const AI = struct {
             return error.ApiRequestFailed;
         }
 
-        var parsed = try std.json.parseFromSlice(std.json.Value, self.allocator, aw.writer.buffered(), .{});
+        return try self.allocator.dupe(u8, aw.writer.buffered());
+    }
+
+    fn parseOpenAIResponse(allocator: std.mem.Allocator, body: []const u8) ![]const u8 {
+        var parsed = try std.json.parseFromSlice(std.json.Value, allocator, body, .{});
+        defer parsed.deinit();
+
+        const root = parsed.value;
+        const msg = root.object.get("choices").?.array.items[0].object.get("message").?.object.get("content").?.string;
+        return try allocator.dupe(u8, msg);
+    }
+
+    fn parseAnthropicResponse(allocator: std.mem.Allocator, body: []const u8) ![]const u8 {
+        var parsed = try std.json.parseFromSlice(std.json.Value, allocator, body, .{});
         defer parsed.deinit();
 
         const root = parsed.value;
         const msg = root.object.get("content").?.array.items[0].object.get("text").?.string;
-        return try self.allocator.dupe(u8, msg);
+        return try allocator.dupe(u8, msg);
     }
 };
 

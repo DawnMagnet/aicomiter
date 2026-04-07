@@ -6,6 +6,21 @@ const Git = @import("git.zig").Git;
 const AI = @import("ai.zig").AI;
 const util = @import("util.zig");
 
+const Command = enum {
+    init,
+    generate,
+    show_config,
+    help,
+};
+
+const command_map = std.StaticStringMap(Command).initComptime(.{
+    .{ "init", .init },
+    .{ "generate", .generate },
+    .{ "gen", .generate },
+    .{ "show-config", .show_config },
+    .{ "help", .help },
+});
+
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     defer _ = gpa.deinit();
@@ -15,15 +30,12 @@ pub fn main() !void {
     var cli = try CLI.parse(allocator);
     defer cli.deinit(allocator);
 
-    // Handle commands
-    if (std.mem.eql(u8, cli.command, "init")) {
-        try handleInit(allocator);
-    } else if (std.mem.eql(u8, cli.command, "generate") or std.mem.eql(u8, cli.command, "gen")) {
-        try handleGenerate(allocator, cli);
-    } else if (std.mem.eql(u8, cli.command, "show-config")) {
-        try handleShowConfig(allocator, cli);
-    } else {
-        try printHelp();
+    const command = command_map.get(cli.command) orelse .help;
+    switch (command) {
+        .init => try handleInit(allocator),
+        .generate => try handleGenerate(allocator, cli),
+        .show_config => try handleShowConfig(allocator, cli),
+        .help => try printHelp(),
     }
 }
 

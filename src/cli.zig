@@ -19,6 +19,49 @@ pub const CLI = struct {
     format: []const u8,
     show_config_sources: bool = true,
 
+    const OptionTag = enum {
+        api_key,
+        provider,
+        model,
+        base_url,
+        temperature,
+        top_p,
+        max_tokens,
+        timeout,
+        language,
+        count,
+        config,
+        all,
+        push,
+        commit,
+        format,
+        show_config_sources,
+    };
+
+    const option_map = std.StaticStringMap(OptionTag).initComptime(.{
+        .{ "--api-key", .api_key },
+        .{ "--provider", .provider },
+        .{ "--model", .model },
+        .{ "--base-url", .base_url },
+        .{ "--temperature", .temperature },
+        .{ "--top-p", .top_p },
+        .{ "--max-tokens", .max_tokens },
+        .{ "--timeout", .timeout },
+        .{ "-l", .language },
+        .{ "--language", .language },
+        .{ "-c", .count },
+        .{ "--count", .count },
+        .{ "--config", .config },
+        .{ "-a", .all },
+        .{ "--all", .all },
+        .{ "-p", .push },
+        .{ "--push", .push },
+        .{ "-C", .commit },
+        .{ "--commit", .commit },
+        .{ "--format", .format },
+        .{ "--show-config-sources", .show_config_sources },
+    });
+
     pub fn parse(allocator: std.mem.Allocator) !CLI {
         const args = try std.process.argsAlloc(allocator);
         defer std.process.argsFree(allocator, args);
@@ -46,79 +89,51 @@ pub const CLI = struct {
 
         while (i < args.len) : (i += 1) {
             const arg = args[i];
+            const tag = option_map.get(arg) orelse continue;
 
-            if (std.mem.eql(u8, arg, "--api-key")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.api_key = try allocator.dupe(u8, args[i]);
-                }
-            } else if (std.mem.eql(u8, arg, "--provider")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.provider = try allocator.dupe(u8, args[i]);
-                }
-            } else if (std.mem.eql(u8, arg, "--model")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.model = try allocator.dupe(u8, args[i]);
-                }
-            } else if (std.mem.eql(u8, arg, "--base-url")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.base_url = try allocator.dupe(u8, args[i]);
-                }
-            } else if (std.mem.eql(u8, arg, "--temperature")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.temperature = try std.fmt.parseFloat(f32, args[i]);
-                }
-            } else if (std.mem.eql(u8, arg, "--top-p")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.top_p = try std.fmt.parseFloat(f32, args[i]);
-                }
-            } else if (std.mem.eql(u8, arg, "--max-tokens")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.max_tokens = try std.fmt.parseInt(i32, args[i], 10);
-                }
-            } else if (std.mem.eql(u8, arg, "--timeout")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.timeout = try std.fmt.parseInt(i32, args[i], 10);
-                }
-            } else if (std.mem.eql(u8, arg, "-l") or std.mem.eql(u8, arg, "--language")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.language = try allocator.dupe(u8, args[i]);
-                }
-            } else if (std.mem.eql(u8, arg, "-c") or std.mem.eql(u8, arg, "--count")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.count = try std.fmt.parseInt(i32, args[i], 10);
-                }
-            } else if (std.mem.eql(u8, arg, "--config")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.config = try allocator.dupe(u8, args[i]);
-                }
-            } else if (std.mem.eql(u8, arg, "-a") or std.mem.eql(u8, arg, "--all")) {
-                cli.all = true;
-            } else if (std.mem.eql(u8, arg, "-p") or std.mem.eql(u8, arg, "--push")) {
-                cli.push = true;
-            } else if (std.mem.eql(u8, arg, "-C") or std.mem.eql(u8, arg, "--commit")) {
-                cli.commit = true;
-            } else if (std.mem.eql(u8, arg, "--format")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    allocator.free(cli.format);
-                    cli.format = try allocator.dupe(u8, args[i]);
-                }
-            } else if (std.mem.eql(u8, arg, "--show-config-sources")) {
-                if (i + 1 < args.len) {
-                    i += 1;
-                    cli.show_config_sources = !std.mem.eql(u8, args[i], "false");
-                }
+            switch (tag) {
+                .api_key => if (nextArg(args, &i)) |value| {
+                    try setOptionalString(&cli.api_key, allocator, value);
+                },
+                .provider => if (nextArg(args, &i)) |value| {
+                    try setOptionalString(&cli.provider, allocator, value);
+                },
+                .model => if (nextArg(args, &i)) |value| {
+                    try setOptionalString(&cli.model, allocator, value);
+                },
+                .base_url => if (nextArg(args, &i)) |value| {
+                    try setOptionalString(&cli.base_url, allocator, value);
+                },
+                .temperature => if (nextArg(args, &i)) |value| {
+                    cli.temperature = try std.fmt.parseFloat(f32, value);
+                },
+                .top_p => if (nextArg(args, &i)) |value| {
+                    cli.top_p = try std.fmt.parseFloat(f32, value);
+                },
+                .max_tokens => if (nextArg(args, &i)) |value| {
+                    cli.max_tokens = try std.fmt.parseInt(i32, value, 10);
+                },
+                .timeout => if (nextArg(args, &i)) |value| {
+                    cli.timeout = try std.fmt.parseInt(i32, value, 10);
+                },
+                .language => if (nextArg(args, &i)) |value| {
+                    try setOptionalString(&cli.language, allocator, value);
+                },
+                .count => if (nextArg(args, &i)) |value| {
+                    cli.count = try std.fmt.parseInt(i32, value, 10);
+                },
+                .config => if (nextArg(args, &i)) |value| {
+                    try setOptionalString(&cli.config, allocator, value);
+                },
+                .all => cli.all = true,
+                .push => cli.push = true,
+                .commit => cli.commit = true,
+                .format => if (nextArg(args, &i)) |value| {
+                    try setRequiredString(&cli.format, allocator, value);
+                },
+                .show_config_sources => if (nextArg(args, &i)) |value| {
+                    cli.show_config_sources = !std.mem.eql(u8, value, "false");
+                },
             }
         }
 
@@ -134,6 +149,22 @@ pub const CLI = struct {
         if (self.language) |language| allocator.free(language);
         if (self.config) |config| allocator.free(config);
         allocator.free(self.format);
+    }
+
+    fn nextArg(args: []const []const u8, index: *usize) ?[]const u8 {
+        if (index.* + 1 >= args.len) return null;
+        index.* += 1;
+        return args[index.*];
+    }
+
+    fn setOptionalString(target: *?[]const u8, allocator: std.mem.Allocator, value: []const u8) !void {
+        if (target.*) |existing| allocator.free(existing);
+        target.* = try allocator.dupe(u8, value);
+    }
+
+    fn setRequiredString(target: *[]const u8, allocator: std.mem.Allocator, value: []const u8) !void {
+        allocator.free(target.*);
+        target.* = try allocator.dupe(u8, value);
     }
 };
 
