@@ -1,295 +1,120 @@
-# aicomiter 使用指南
+# aicomiter Usage
 
-## 快速开始
+This guide focuses on day-to-day usage.
 
-### 1. 构建
-
-```bash
-go build -o aicomiter main.go
-```
-
-### 2. 配置 API Key
-
-有三种方式设置 API Key：
-
-#### 方式一：环境变量（推荐）
+## Build
 
 ```bash
-export API_KEY=sk-xxx
-./aicomiter generate
+zig build -Doptimize=ReleaseSafe
 ```
 
-#### 方式二：配置文件
-
-创建 `~/.aicomiter.yaml`：
-
-```yaml
-api-key: sk-xxx
-provider: openai
-model: gpt-4o-mini
-```
-
-然后运行：
-```bash
-./aicomiter generate
-```
-
-#### 方式三：命令行参数
+Use the built binary:
 
 ```bash
-./aicomiter generate --api-key sk-xxx
+./zig-out/bin/aicomiter
 ```
 
-## 基本用法
-
-### 生成单个提交信息
+## Initialize Configuration
 
 ```bash
-# 使用 OpenAI（默认）
-./aicomiter generate --api-key sk-xxx
-
-# 使用 Anthropic
-./aicomiter generate --provider anthropic --api-key sk-ant-xxx
+./zig-out/bin/aicomiter init
 ```
 
-### 生成多个建议
+Then edit `~/.aicomiter.yaml` and set `ai.api_key`.
+
+## Basic Flow
 
 ```bash
-./aicomiter generate --count 3
+git add -A
+./zig-out/bin/aicomiter generate
 ```
 
-输出示例：
-```
-feat: add dark mode support
+Copy the output and commit manually, or use `--commit`.
 
-refactor: improve error handling in auth module
+## Common Commands
 
-docs: update API documentation for new endpoints
-```
-
-### 用中文生成
+Generate one message:
 
 ```bash
-./aicomiter generate --language zh
+./zig-out/bin/aicomiter gen
 ```
 
-## 完整选项
+Generate three suggestions:
 
 ```bash
-./aicomiter generate --help
+./zig-out/bin/aicomiter gen -c 3
 ```
 
-**主要参数：**
-
-- `--api-key` - API 密钥（必需，可用环境变量 `API_KEY` 替代）
-- `--provider` - AI 提供商：`openai` 或 `anthropic`（默认：openai）
-- `--model` - 模型名称（默认取决于提供商）
-  - OpenAI: `gpt-4o-mini`
-  - Anthropic: `claude-3-5-sonnet-20241022`
-- `--language` / `-l` - 语言（默认：en，支持 zh/en）
-- `--count` / `-c` - 建议数量（默认：1）
-- `--config` - 配置文件路径
-
-## 工作流示例
-
-### 1. 修改代码并暂存
+Use Chinese output:
 
 ```bash
-git add src/main.go src/utils.go
+./zig-out/bin/aicomiter gen -l zh
 ```
 
-### 2. 生成提交信息
+Stage all changes before generating:
 
 ```bash
-./aicomiter generate
+./zig-out/bin/aicomiter gen --all
 ```
 
-### 3. 使用生成的信息提交
+Generate and auto-commit:
 
 ```bash
-git commit -m "生成的提交信息"
+./zig-out/bin/aicomiter gen --all --commit
 ```
 
-### 完整一行命令
+Generate, auto-commit, and push:
 
 ```bash
-# 生成并复制到剪贴板（macOS）
-./aicomiter generate | pbcopy
-
-# Linux
-./aicomiter generate | xclip -selection clipboard
-
-# Windows
-./aicomiter generate | clip
+./zig-out/bin/aicomiter gen --all --commit --push
 ```
 
-## 提供商对比
-
-### OpenAI
-
-优点：
-- 更便宜的 API 成本
-- 支持多个模型版本
-- 更快的响应速度
-
-使用：
-```bash
-./aicomiter generate --provider openai --api-key sk-xxx
-```
-
-### Anthropic
-
-优点：
-- 更长的上下文窗口
-- 更好的推理能力
-- 更安全的内容过滤
-
-使用：
-```bash
-./aicomiter generate --provider anthropic --api-key sk-ant-xxx
-```
-
-## 高级用法
-
-### 自定义模型
+## Override by CLI Flags
 
 ```bash
-# 使用更强大的模型（成本更高）
-./aicomiter generate --model gpt-4-turbo
-
-# 使用更经济的模型
-./aicomiter generate --model gpt-3.5-turbo
+./zig-out/bin/aicomiter gen \
+  --provider openai \
+  --api-key sk-xxx \
+  --model gpt-4o-mini \
+  --temperature 0.7 \
+  --top-p 1.0 \
+  --max-tokens 500 \
+  --timeout 30 \
+  --language en \
+  --count 1
 ```
 
-### 多语言支持
+## show-config
+
+Show current config:
 
 ```bash
-# 中文
-./aicomiter generate -l zh
-
-# 英文（默认）
-./aicomiter generate -l en
-
-# 其他语言
-./aicomiter generate -l ja  # 日文
-./aicomiter generate -l ko  # 韩文
-./aicomiter generate -l fr  # 法文
+./zig-out/bin/aicomiter show-config
 ```
 
-### 生成多个建议供选择
+Show JSON output:
 
 ```bash
-./aicomiter generate --count 5
+./zig-out/bin/aicomiter show-config --format json
 ```
 
-## 常见问题
+## Troubleshooting
 
-### Q: 提交信息格式是什么？
+Missing API key:
 
-A: 遵循 Conventional Commits 格式：
+- Ensure `ai.api_key` is set in `~/.aicomiter.yaml`
+- Or pass `--api-key`
+- Or set `AICOMITER_AI_API_KEY`
 
-```
-<type>(<scope>): <subject>
+No staged changes:
 
-<body>
-
-<footer>
-```
-
-常见类型：
-- `feat`: 新功能
-- `fix`: 修复 bug
-- `docs`: 文档
-- `style`: 代码风格（不改变功能）
-- `refactor`: 代码重构
-- `perf`: 性能优化
-- `test`: 测试
-- `chore`: 构建、依赖等
-
-示例：
-```
-feat(auth): add JWT token refresh mechanism
-```
-
-### Q: API 密钥安全吗？
-
-A: 
-- 不要将 API 密钥提交到 git
-- 使用环境变量或配置文件（添加到 .gitignore）
-- 定期轮换 API 密钥
-
-### Q: 如何处理大的代码变更？
-
-A: 工具自动处理，但建议：
-- 将大的变更分解成多个提交
-- 每次提交只修改相关的文件
-
-### Q: 支持 IDE 集成吗？
-
-A: 可以创建脚本和快捷键：
-
-**VS Code 集成示例：**
-```json
-{
-  "key": "ctrl+shift+m",
-  "command": "workbench.action.terminal.sendSequence",
-  "args": { "text": "./aicomiter generate\n" }
-}
-```
-
-### Q: 成本大约是多少？
-
-A: 
-- OpenAI (gpt-4o-mini): ~$0.01-0.05 每个请求
-- Anthropic (Claude 3.5): ~$0.01-0.03 每个请求
-
-## 故障排除
-
-### 错误：API key 无效
-
-```
-Error: openai API error: Invalid API key
-```
-
-解决：
-1. 检查 API 密钥是否正确
-2. 确保 API 密钥有效且有足够额度
-3. 检查是否正确设置了环境变量
-
-### 错误：网络连接问题
-
-```
-Error: failed to send request: connection refused
-```
-
-解决：
-1. 检查网络连接
-2. 检查是否能访问 api.openai.com 或 api.anthropic.com
-3. 如果在中国，可能需要配置代理
-
-### 错误：没有暂存的变更
-
-```
-No staged changes found.
-```
-
-解决：
 ```bash
-git add <files>  # 暂存文件
-./aicomiter generate
+git add -A
+./zig-out/bin/aicomiter gen
 ```
 
-## 环境变量
+Network/API errors:
 
-- `API_KEY` - API 密钥
-- `PROVIDER` - AI 提供商（openai/anthropic）
-- `MODEL` - 模型名称
-
-## 配置文件位置
-
-- `$HOME/.aicomiter.yaml` - 默认位置
-- 或通过 `--config` 指定自定义位置
-
-## 许可证
-
-MIT
+- Check internet connectivity
+- Check provider endpoint and API key
+- Increase timeout with `--timeout`

@@ -38,7 +38,7 @@ pub const Config = struct {
         };
         const aa = arena.allocator();
 
-        // Load from config file first
+        // Load persistent baseline first to establish deterministic defaults.
         if (std.process.getEnvVarOwned(aa, "HOME")) |home_dir| {
             const config_path = try std.fmt.allocPrint(aa, "{s}/.aicomiter.yaml", .{home_dir});
 
@@ -50,7 +50,7 @@ pub const Config = struct {
             } else |_| {}
         } else |_| {}
 
-        // Load from environment variables
+        // Apply environment-layer overrides as deployment-time controls.
         self.loadFromEnv(aa);
 
         return self;

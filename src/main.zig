@@ -26,7 +26,7 @@ pub fn main() !void {
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
-    // Parse CLI arguments
+    // Parse runtime inputs as the experiment control surface.
     var cli = try CLI.parse(allocator);
     defer cli.deinit(allocator);
 
@@ -49,7 +49,7 @@ fn handleInit(allocator: std.mem.Allocator) !void {
     const config_path = try std.fmt.allocPrint(allocator, "{s}/.aicomiter.yaml", .{home_dir});
     defer allocator.free(config_path);
 
-    // Check if config already exists
+    // Treat existing local config as authoritative initialization state.
     if (std.fs.openFileAbsolute(config_path, .{})) |file| {
         file.close();
         std.debug.print("ℹ️  Config already exists at: {s}\n", .{config_path});
@@ -57,22 +57,22 @@ fn handleInit(allocator: std.mem.Allocator) !void {
     } else |_| {}
 
     const config_content =
-        \\# aicomiter configuration file
+        \\# aicomiter configuration template
         \\# ~/.aicomiter.yaml
         \\
         \\ai:
-        \\  provider: openai              # openai or anthropic
-        \\  api_key: ""                   # Your API key
-        \\  base_url: ""                  # Optional: custom API endpoint
-        \\  model: ""                     # Optional: model name
-        \\  temperature: 0.7              # 0-2, lower = more deterministic
-        \\  top_p: 1.0                    # 0-1, nucleus sampling
-        \\  max_tokens: 500               # Max response length
+        \\  provider: openai              # Provider under test: openai or anthropic
+        \\  api_key: ""                   # Secret credential for selected provider
+        \\  base_url: ""                  # Optional endpoint override
+        \\  model: ""                     # Optional model override
+        \\  temperature: 0.7              # Sampling temperature in [0, 2]
+        \\  top_p: 1.0                    # Nucleus sampling threshold in [0, 1]
+        \\  max_tokens: 500               # Hard cap on completion length
         \\  timeout: 30                   # Request timeout in seconds
         \\
         \\generate:
-        \\  language: en                  # en, zh, etc
-        \\  count: 1                      # Number of suggestions
+        \\  language: en                  # Output language code (en, zh, ...)
+        \\  count: 1                      # Number of candidates per run
     ;
 
     var file = try std.fs.createFileAbsolute(config_path, .{});
@@ -84,21 +84,21 @@ fn handleInit(allocator: std.mem.Allocator) !void {
 }
 
 fn handleGenerate(allocator: std.mem.Allocator, cli: CLI) !void {
-    // Load config
+    // Load baseline configuration from file/env/default layers.
     var config = try Config.load(allocator);
     defer config.deinit();
 
-    // Override with CLI flags
+    // Apply run-time overrides to form the final execution profile.
     config.applyCliOverrides(cli);
 
-    // Show config sources if requested
+    // Emit provenance of effective configuration for reproducibility.
     if (cli.show_config_sources) {
         std.debug.print("📋 Config sources: ", .{});
         try config.printSources();
         std.debug.print("\n", .{});
     }
 
-    // Stage all if requested
+    // Optionally stage all pending changes to expand diff coverage.
     if (cli.all) {
         std.debug.print("📝 Staging all changes...\n", .{});
         var git = Git.init(allocator);
@@ -106,7 +106,7 @@ fn handleGenerate(allocator: std.mem.Allocator, cli: CLI) !void {
         try git.stageAll();
     }
 
-    // Get git diff
+    // Acquire staged diff as the sole model input corpus.
     var git = Git.init(allocator);
     defer git.deinit();
 
@@ -121,13 +121,13 @@ fn handleGenerate(allocator: std.mem.Allocator, cli: CLI) !void {
         return;
     }
 
-    // Validate config
+    // Validate critical credentials before network calls.
     if (config.ai.api_key.len == 0) {
         std.debug.print("Error: API key is required. Set it in config file or use --api-key\n", .{});
         return;
     }
 
-    // Generate commit message
+    // Run inference against selected provider/model.
     var ai = try AI.init(allocator, config);
     defer ai.deinit();
 
@@ -139,7 +139,7 @@ fn handleGenerate(allocator: std.mem.Allocator, cli: CLI) !void {
 
     std.debug.print("{s}\n", .{commit_message});
 
-    // Create commit if requested or if push is requested
+    // Materialize commit and optionally propagate to remote.
     if (cli.commit or cli.push) {
         std.debug.print("💾 Creating commit...\n", .{});
         try git.commit(commit_message);
