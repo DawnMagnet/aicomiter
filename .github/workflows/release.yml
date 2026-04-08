@@ -10,61 +10,9 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    name: ${{ matrix.os }}-${{ matrix.arch }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: linux
-            arch: x64
-            runner: ubuntu-latest
-            zig_target: x86_64-linux-gnu.2.28
-            ext: ""
-            archive_ext: tar.gz
-          - os: linux
-            arch: x86
-            runner: ubuntu-latest
-            zig_target: x86-linux-gnu.2.28
-            ext: ""
-            archive_ext: tar.gz
-          - os: linux
-            arch: aarch64
-            runner: ubuntu-latest
-            zig_target: aarch64-linux-gnu.2.28
-            ext: ""
-            archive_ext: tar.gz
-          - os: windows
-            arch: x64
-            runner: windows-latest
-            zig_target: x86_64-windows-gnu
-            ext: .exe
-            archive_ext: zip
-          - os: windows
-            arch: x86
-            runner: windows-latest
-            zig_target: x86-windows-gnu
-            ext: .exe
-            archive_ext: zip
-          - os: windows
-            arch: aarch64
-            runner: windows-latest
-            zig_target: aarch64-windows-gnu
-            ext: .exe
-            archive_ext: zip
-          - os: macos
-            arch: x64
-            runner: macos-latest
-            zig_target: x86_64-macos
-            ext: ""
-            archive_ext: tar.gz
-          - os: macos
-            arch: aarch64
-            runner: macos-latest
-            zig_target: aarch64-macos
-            ext: ""
-            archive_ext: tar.gz
+  build-all:
+    name: Build all targets on Ubuntu
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -75,95 +23,74 @@ jobs:
         with:
           version: 0.15.2
 
-      - name: Build
-        shell: bash
-        run: |
-          set -euxo pipefail
-          zig build -Doptimize=ReleaseSmall -Dtarget=${{ matrix.zig_target }}
-
-      - name: Install UPX (Linux)
-        if: runner.os == 'Linux'
+      - name: Install tools
         shell: bash
         run: |
           set -euxo pipefail
           sudo apt-get update
-          sudo apt-get install -y upx-ucl || sudo apt-get install -y upx
+          sudo apt-get install -y zip upx-ucl || sudo apt-get install -y zip upx
 
-      - name: Install UPX (macOS)
-        if: runner.os == 'macOS'
+      - name: Build, compress, and package all targets
         shell: bash
         run: |
           set -euxo pipefail
-          brew update
-          brew install upx
 
-      - name: Install UPX (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          choco install upx -y
-
-      - name: Compress binary with UPX (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          set -euxo pipefail
-          upx --best --lzma "zig-out/bin/aicomiter${{ matrix.ext }}"
-
-      - name: Compress binary with UPX (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          upx --best --lzma "zig-out/bin/aicomiter${{ matrix.ext }}"
-
-      - name: Package (Unix)
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          set -euxo pipefail
           VERSION="${GITHUB_REF_NAME}"
-          ASSET_NAME="aicomiter-${VERSION}-${{ matrix.os }}-${{ matrix.arch }}"
-          mkdir -p dist
-          cp "zig-out/bin/aicomiter${{ matrix.ext }}" "dist/aicomiter${{ matrix.ext }}"
-          tar -C dist -czf "${ASSET_NAME}.tar.gz" "aicomiter${{ matrix.ext }}"
-          echo "ASSET_PATH=${ASSET_NAME}.tar.gz" >> "$GITHUB_ENV"
+          mkdir -p artifacts
 
-      - name: Package (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $version = "${env:GITHUB_REF_NAME}"
-          $assetName = "aicomiter-$version-${{ matrix.os }}-${{ matrix.arch }}"
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "zig-out/bin/aicomiter${{ matrix.ext }}" "dist/aicomiter${{ matrix.ext }}"
-          Compress-Archive -Path "dist/aicomiter${{ matrix.ext }}" -DestinationPath "$assetName.zip" -Force
-          "ASSET_PATH=$assetName.zip" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          build_and_pack() {
+            local os="$1"
+            local arch="$2"
+            local target="$3"
+            local ext="$4"
+            local archive_kind="$5"
+
+            zig build -Doptimize=ReleaseSmall -Dtarget="${target}"
+
+            local bin_path="zig-out/bin/aicomiter${ext}"
+            upx --best --lzma "${bin_path}" || true
+
+            local base="aicomiter-${VERSION}-${os}-${arch}"
+            local stage_dir="stage/${base}"
+            mkdir -p "${stage_dir}"
+            cp "${bin_path}" "${stage_dir}/aicomiter${ext}"
+
+            if [ "${archive_kind}" = "zip" ]; then
+              (cd "${stage_dir}" && zip -9 "../../artifacts/${base}.zip" "aicomiter${ext}")
+            else
+              tar -C "${stage_dir}" -czf "artifacts/${base}.tar.gz" "aicomiter${ext}"
+            fi
+          }
+
+          build_and_pack linux x64 x86_64-linux-gnu.2.28 "" tar.gz
+          build_and_pack linux x86 x86-linux-gnu.2.28 "" tar.gz
+          build_and_pack linux aarch64 aarch64-linux-gnu.2.28 "" tar.gz
+          build_and_pack windows x64 x86_64-windows-gnu ".exe" zip
+          build_and_pack windows x86 x86-windows-gnu ".exe" zip
+          build_and_pack windows aarch64 aarch64-windows-gnu ".exe" zip
+          build_and_pack macos x64 x86_64-macos "" tar.gz
+          build_and_pack macos aarch64 aarch64-macos "" tar.gz
+
+          ls -lah artifacts
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: aicomiter-${{ matrix.os }}-${{ matrix.arch }}
-          path: ${{ env.ASSET_PATH }}
+          name: aicomiter-all-platforms
+          path: artifacts/*
           if-no-files-found: error
 
   release:
     name: Publish Release
     runs-on: ubuntu-latest
-    needs: build
+    needs: build-all
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - name: Download all build artifacts
+      - name: Download build artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist
-
-      - name: Flatten downloaded files
-        shell: bash
-        run: |
-          set -euxo pipefail
-          mkdir -p release-assets
-          find dist -maxdepth 3 -type f -exec cp {} release-assets/ \;
-          ls -lah release-assets
+          name: aicomiter-all-platforms
+          path: release-assets
 
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
