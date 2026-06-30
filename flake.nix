@@ -2,7 +2,7 @@
   description = "AI Git Commit Message Generator";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "https://github.hlug.cn/https://github.com/NixOS/nixpkgs/archive/nixos-26.05.tar.gz";
   };
 
   outputs =

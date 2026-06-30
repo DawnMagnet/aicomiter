@@ -2,12 +2,14 @@ const std = @import("std");
 
 pub const Git = struct {
     allocator: std.mem.Allocator,
+    io: std.Io,
 
     const max_diff_size = 1024 * 1024;
 
-    pub fn init(allocator: std.mem.Allocator) Git {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io) Git {
         return .{
             .allocator = allocator,
+            .io = io,
         };
     }
 
@@ -32,42 +34,52 @@ pub const Git = struct {
     }
 
     fn runChecked(self: Git, argv: []const []const u8, failure: anyerror) !void {
-        var child = std.process.Child.init(argv, self.allocator);
-        child.stdout_behavior = .Inherit;
-        child.stderr_behavior = .Inherit;
+        const result = try std.process.run(self.allocator, self.io, .{
+            .argv = argv,
+            .stdout_limit = .limited(1024 * 1024),
+            .stderr_limit = .limited(1024 * 1024),
+        });
+        defer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
 
-        try child.spawn();
-        const term = try child.wait();
-
-        switch (term) {
-            .Exited => |code| if (code != 0) return failure,
-            else => return failure,
+        switch (result.term) {
+            .exited => |code| if (code != 0) {
+                printCommandOutput(result);
+                return failure;
+            },
+            else => {
+                printCommandOutput(result);
+                return failure;
+            },
         }
     }
 
     fn runCaptureChecked(self: Git, argv: []const []const u8, max_bytes: usize, failure: anyerror) ![]const u8 {
-        var child = std.process.Child.init(argv, self.allocator);
-        child.stdout_behavior = .Pipe;
-        child.stderr_behavior = .Pipe;
+        const result = try std.process.run(self.allocator, self.io, .{
+            .argv = argv,
+            .stdout_limit = .limited(max_bytes),
+            .stderr_limit = .limited(1024 * 1024),
+        });
+        errdefer self.allocator.free(result.stdout);
+        defer self.allocator.free(result.stderr);
 
-        try child.spawn();
-
-        const stdout = child.stdout orelse return error.NoStdout;
-        const output = try stdout.readToEndAlloc(self.allocator, max_bytes);
-
-        const term = try child.wait();
-        switch (term) {
-            .Exited => |code| if (code != 0) {
-                self.allocator.free(output);
+        switch (result.term) {
+            .exited => |code| if (code != 0) {
+                printCommandOutput(result);
                 return failure;
             },
             else => {
-                self.allocator.free(output);
+                printCommandOutput(result);
                 return failure;
             },
         }
 
-        return output;
+        return result.stdout;
+    }
+
+    fn printCommandOutput(result: std.process.RunResult) void {
+        if (result.stdout.len > 0) std.debug.print("{s}", .{result.stdout});
+        if (result.stderr.len > 0) std.debug.print("{s}", .{result.stderr});
     }
 };
 
@@ -75,7 +87,7 @@ test "Git - initialization" {
     const testing = std.testing;
     const allocator = testing.allocator;
 
-    const git = Git.init(allocator);
+    const git = Git.init(allocator, std.testing.io);
     defer git.deinit();
 
     // Validate structural initialization invariants.

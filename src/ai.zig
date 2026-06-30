@@ -3,13 +3,15 @@ const Config = @import("config.zig").Config;
 
 pub const AI = struct {
     allocator: std.mem.Allocator,
+    io: std.Io,
     config: Config,
 
     const system_prompt = "You are an expert developer. Generate a concise, conventional git commit message based on the diff. Do not explain, just return the commit message.";
 
-    pub fn init(allocator: std.mem.Allocator, config: Config) !AI {
+    pub fn init(allocator: std.mem.Allocator, io: std.Io, config: Config) !AI {
         return .{
             .allocator = allocator,
+            .io = io,
             .config = config,
         };
     }
@@ -42,7 +44,7 @@ pub const AI = struct {
         const user_prompt = try buildUserPrompt(self.allocator, language, diff);
         defer self.allocator.free(user_prompt);
 
-        var payload_aw: std.io.Writer.Allocating = .init(self.allocator);
+        var payload_aw: std.Io.Writer.Allocating = .init(self.allocator);
         defer payload_aw.deinit();
 
         var w: std.json.Stringify = .{ .writer = &payload_aw.writer, .options = .{} };
@@ -91,7 +93,7 @@ pub const AI = struct {
         const user_prompt = try buildUserPrompt(self.allocator, language, diff);
         defer self.allocator.free(user_prompt);
 
-        var payload_aw: std.io.Writer.Allocating = .init(self.allocator);
+        var payload_aw: std.Io.Writer.Allocating = .init(self.allocator);
         defer payload_aw.deinit();
 
         var w: std.json.Stringify = .{ .writer = &payload_aw.writer, .options = .{} };
@@ -134,10 +136,10 @@ pub const AI = struct {
     }
 
     fn fetchJson(self: *AI, url: []const u8, headers: []const std.http.Header, payload: []const u8) ![]const u8 {
-        var client: std.http.Client = .{ .allocator = self.allocator };
+        var client: std.http.Client = .{ .allocator = self.allocator, .io = self.io };
         defer client.deinit();
 
-        var aw: std.io.Writer.Allocating = .init(self.allocator);
+        var aw: std.Io.Writer.Allocating = .init(self.allocator);
         defer aw.deinit();
 
         const res = try client.fetch(.{

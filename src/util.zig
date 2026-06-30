@@ -1,7 +1,7 @@
 const std = @import("std");
 
 pub fn escapeJson(allocator: std.mem.Allocator, str: []const u8) ![]const u8 {
-    var result: std.ArrayList(u8) = .{};
+    var result: std.ArrayList(u8) = .empty;
     defer result.deinit(allocator);
 
     try result.append(allocator, '"');

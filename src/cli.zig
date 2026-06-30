@@ -62,10 +62,7 @@ pub const CLI = struct {
         .{ "--show-config-sources", .show_config_sources },
     });
 
-    pub fn parse(allocator: std.mem.Allocator) !CLI {
-        const args = try std.process.argsAlloc(allocator);
-        defer std.process.argsFree(allocator, args);
-
+    pub fn parse(allocator: std.mem.Allocator, args: []const [:0]const u8) !CLI {
         var command: []const u8 = "help";
         const format: []const u8 = "text";
 
@@ -151,7 +148,7 @@ pub const CLI = struct {
         allocator.free(self.format);
     }
 
-    fn nextArg(args: []const []const u8, index: *usize) ?[]const u8 {
+    fn nextArg(args: []const [:0]const u8, index: *usize) ?[]const u8 {
         if (index.* + 1 >= args.len) return null;
         index.* += 1;
         return args[index.*];

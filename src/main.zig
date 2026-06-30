@@ -21,26 +21,30 @@ const command_map = std.StaticStringMap(Command).initComptime(.{
     .{ "help", .help },
 });
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+pub fn main(init: std.process.Init) !void {
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
+    var args_arena = std.heap.ArenaAllocator.init(allocator);
+    defer args_arena.deinit();
+    const args = try init.minimal.args.toSlice(args_arena.allocator());
+
     // Parse runtime inputs as the experiment control surface.
-    var cli = try CLI.parse(allocator);
+    var cli = try CLI.parse(allocator, args);
     defer cli.deinit(allocator);
 
     const command = command_map.get(cli.command) orelse .help;
     switch (command) {
-        .init => try handleInit(allocator),
-        .generate => try handleGenerate(allocator, cli),
-        .show_config => try handleShowConfig(allocator, cli),
+        .init => try handleInit(allocator, init.io, init.minimal.environ),
+        .generate => try handleGenerate(allocator, init.io, init.minimal.environ, cli),
+        .show_config => try handleShowConfig(allocator, init.io, init.minimal.environ, cli),
         .help => try printHelp(),
     }
 }
 
-fn handleInit(allocator: std.mem.Allocator) !void {
-    const home_dir = std.process.getEnvVarOwned(allocator, "HOME") catch |err| {
+fn handleInit(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) !void {
+    const home_dir = std.process.Environ.getAlloc(environ, allocator, "HOME") catch |err| {
         std.debug.print("Error: Could not get HOME directory: {}\n", .{err});
         return;
     };
@@ -50,8 +54,8 @@ fn handleInit(allocator: std.mem.Allocator) !void {
     defer allocator.free(config_path);
 
     // Treat existing local config as authoritative initialization state.
-    if (std.fs.openFileAbsolute(config_path, .{})) |file| {
-        file.close();
+    if (std.Io.Dir.openFileAbsolute(io, config_path, .{})) |file| {
+        file.close(io);
         std.debug.print("ℹ️  Config already exists at: {s}\n", .{config_path});
         return;
     } else |_| {}
@@ -75,17 +79,17 @@ fn handleInit(allocator: std.mem.Allocator) !void {
         \\  count: 1                      # Number of candidates per run
     ;
 
-    var file = try std.fs.createFileAbsolute(config_path, .{});
-    defer file.close();
+    var file = try std.Io.Dir.createFileAbsolute(io, config_path, .{});
+    defer file.close(io);
 
-    try file.writeAll(config_content);
+    try file.writeStreamingAll(io, config_content);
     std.debug.print("✅ Config file created at: {s}\n", .{config_path});
     std.debug.print("📝 Please edit it and add your API key\n", .{});
 }
 
-fn handleGenerate(allocator: std.mem.Allocator, cli: CLI) !void {
+fn handleGenerate(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, cli: CLI) !void {
     // Load baseline configuration from file/env/default layers.
-    var config = try Config.load(allocator);
+    var config = try Config.load(allocator, io, environ);
     defer config.deinit();
 
     // Apply run-time overrides to form the final execution profile.
@@ -101,13 +105,13 @@ fn handleGenerate(allocator: std.mem.Allocator, cli: CLI) !void {
     // Optionally stage all pending changes to expand diff coverage.
     if (cli.all) {
         std.debug.print("📝 Staging all changes...\n", .{});
-        var git = Git.init(allocator);
+        var git = Git.init(allocator, io);
         defer git.deinit();
         try git.stageAll();
     }
 
     // Acquire staged diff as the sole model input corpus.
-    var git = Git.init(allocator);
+    var git = Git.init(allocator, io);
     defer git.deinit();
 
     const diff = git.getStagedDiff() catch |err| {
@@ -128,7 +132,7 @@ fn handleGenerate(allocator: std.mem.Allocator, cli: CLI) !void {
     }
 
     // Run inference against selected provider/model.
-    var ai = try AI.init(allocator, config);
+    var ai = try AI.init(allocator, io, config);
     defer ai.deinit();
 
     const commit_message = ai.generateCommitMessage(diff, config.generate.language, config.generate.count) catch |err| {
@@ -153,8 +157,8 @@ fn handleGenerate(allocator: std.mem.Allocator, cli: CLI) !void {
     }
 }
 
-fn handleShowConfig(allocator: std.mem.Allocator, cli: CLI) !void {
-    var config = try Config.load(allocator);
+fn handleShowConfig(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ, cli: CLI) !void {
+    var config = try Config.load(allocator, io, environ);
     defer config.deinit();
 
     config.applyCliOverrides(cli);

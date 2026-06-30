@@ -29,7 +29,7 @@ pub const Config = struct {
     const ai_fields = std.meta.fields(AIConfig);
     const generate_fields = std.meta.fields(GenerateConfig);
 
-    pub fn load(allocator: std.mem.Allocator) !Self {
+    pub fn load(allocator: std.mem.Allocator, io: std.Io, environ: std.process.Environ) !Self {
         var arena = try allocator.create(std.heap.ArenaAllocator);
         arena.* = std.heap.ArenaAllocator.init(allocator);
         var self = Self{
@@ -39,19 +39,20 @@ pub const Config = struct {
         const aa = arena.allocator();
 
         // Load persistent baseline first to establish deterministic defaults.
-        if (std.process.getEnvVarOwned(aa, "HOME")) |home_dir| {
+        if (std.process.Environ.getAlloc(environ, aa, "HOME")) |home_dir| {
             const config_path = try std.fmt.allocPrint(aa, "{s}/.aicomiter.yaml", .{home_dir});
 
-            if (std.fs.openFileAbsolute(config_path, .{})) |file| {
-                defer file.close();
+            if (std.Io.Dir.openFileAbsolute(io, config_path, .{})) |file| {
+                defer file.close(io);
                 self.config_file = config_path;
-                const content = try file.readToEndAlloc(aa, 1024 * 100);
+                var file_reader = file.reader(io, &.{});
+                const content = try file_reader.interface.allocRemaining(aa, .limited(1024 * 100));
                 try self.parseYaml(content);
             } else |_| {}
         } else |_| {}
 
         // Apply environment-layer overrides as deployment-time controls.
-        self.loadFromEnv(aa);
+        self.loadFromEnv(environ, aa);
 
         return self;
     }
@@ -68,12 +69,12 @@ pub const Config = struct {
         }
     }
 
-    fn loadFromEnv(self: *Self, aa: std.mem.Allocator) void {
-        applyFirstEnvValue(aa, &self.ai.api_key, &.{ "AICOMITER_AI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "API_KEY" });
-        applyFirstEnvValue(aa, &self.ai.base_url, &.{ "AICOMITER_AI_BASE_URL", "OPENAI_API_BASE", "API_BASE_URL" });
-        applyFirstEnvValue(aa, &self.ai.provider, &.{"AICOMITER_AI_PROVIDER"});
-        applyFirstEnvValue(aa, &self.ai.model, &.{ "AICOMITER_AI_MODEL", "MODEL" });
-        applyFirstEnvValue(aa, &self.generate.language, &.{"AICOMITER_GENERATE_LANGUAGE"});
+    fn loadFromEnv(self: *Self, environ: std.process.Environ, aa: std.mem.Allocator) void {
+        applyFirstEnvValue(environ, aa, &self.ai.api_key, &.{ "AICOMITER_AI_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY", "API_KEY" });
+        applyFirstEnvValue(environ, aa, &self.ai.base_url, &.{ "AICOMITER_AI_BASE_URL", "OPENAI_API_BASE", "API_BASE_URL" });
+        applyFirstEnvValue(environ, aa, &self.ai.provider, &.{"AICOMITER_AI_PROVIDER"});
+        applyFirstEnvValue(environ, aa, &self.ai.model, &.{ "AICOMITER_AI_MODEL", "MODEL" });
+        applyFirstEnvValue(environ, aa, &self.generate.language, &.{"AICOMITER_GENERATE_LANGUAGE"});
     }
 
     pub fn applyCliOverrides(self: *Self, cli: CLI) void {
@@ -143,9 +144,9 @@ pub const Config = struct {
         self.allocator.destroy(self.arena);
     }
 
-    fn applyFirstEnvValue(aa: std.mem.Allocator, target: *[]const u8, names: []const []const u8) void {
+    fn applyFirstEnvValue(environ: std.process.Environ, aa: std.mem.Allocator, target: *[]const u8, names: []const []const u8) void {
         for (names) |name| {
-            if (std.process.getEnvVarOwned(aa, name)) |value| {
+            if (std.process.Environ.getAlloc(environ, aa, name)) |value| {
                 target.* = value;
                 return;
             } else |_| {}
