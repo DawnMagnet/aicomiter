@@ -1,103 +1,44 @@
-name: Build and Release
+name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-all:
-    name: Build all targets on Ubuntu
+  quality:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Zig
-        uses: mlugg/setup-zig@v2
-        with:
-          version: 0.15.2
-
-      - name: Install tools
-        shell: bash
-        run: |
-          set -euxo pipefail
-          sudo apt-get update
-          sudo apt-get install -y zip upx-ucl || sudo apt-get install -y zip upx
-
-      - name: Build, compress, and package all targets
-        shell: bash
-        run: |
-          set -euxo pipefail
-
-          VERSION="${GITHUB_REF_NAME}"
-          mkdir -p artifacts
-
-          build_and_pack() {
-            local os="$1"
-            local arch="$2"
-            local target="$3"
-            local ext="$4"
-            local archive_kind="$5"
-
-            zig build -Doptimize=ReleaseSmall -Dtarget="${target}"
-
-            local bin_path="zig-out/bin/aicomiter${ext}"
-            upx --best --lzma "${bin_path}" || true
-
-            local base="aicomiter-${VERSION}-${os}-${arch}"
-            local stage_dir="stage/${base}"
-            mkdir -p "${stage_dir}"
-            cp "${bin_path}" "${stage_dir}/aicomiter${ext}"
-
-            if [ "${archive_kind}" = "zip" ]; then
-              (cd "${stage_dir}" && zip -9 "../../artifacts/${base}.zip" "aicomiter${ext}")
-            else
-              tar -C "${stage_dir}" -czf "artifacts/${base}.tar.gz" "aicomiter${ext}"
-            fi
-          }
-
-          build_and_pack linux x64 x86_64-linux-gnu.2.28 "" tar.gz
-          build_and_pack linux x86 x86-linux-gnu.2.28 "" tar.gz
-          build_and_pack linux aarch64 aarch64-linux-gnu.2.28 "" tar.gz
-          build_and_pack windows x64 x86_64-windows-gnu ".exe" zip
-          build_and_pack windows x86 x86-windows-gnu ".exe" zip
-          build_and_pack windows aarch64 aarch64-windows-gnu ".exe" zip
-          build_and_pack macos x64 x86_64-macos "" tar.gz
-          build_and_pack macos aarch64 aarch64-macos "" tar.gz
-
-          ls -lah artifacts
-
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: aicomiter-all-platforms
-          path: artifacts/*
-          if-no-files-found: error
+      - uses: actions/checkout@v4
+      - name: Install Rust 1.97.0
+        run: rustup toolchain install 1.97.0 --profile minimal --component rustfmt,clippy
+      - run: cargo +1.97.0 fmt --all -- --check
+      - run: cargo +1.97.0 clippy --all-targets --all-features -- -D warnings
+      - run: cargo +1.97.0 test --all-targets --locked
 
   release:
-    name: Publish Release
-    runs-on: ubuntu-latest
-    needs: build-all
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name != 'pull_request'
+    needs: quality
+    runs-on: macos-14
     steps:
-      - name: Download build artifacts
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout@v4
         with:
-          name: aicomiter-all-platforms
-          path: release-assets
-
-      - name: Create GitHub Release and upload assets
-        uses: softprops/action-gh-release@v2
+          fetch-depth: 0
+      - name: Install Rust 1.97.0
+        run: rustup toolchain install 1.97.0 --profile minimal
+      - uses: mlugg/setup-zig@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          draft: false
-          prerelease: false
-          files: |
-            release-assets/*
+          version: 0.15.2
+      - name: Install cargo-zigbuild
+        run: cargo +1.97.0 install cargo-zigbuild --locked
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean ${{ github.event_name == 'workflow_dispatch' && '--snapshot' || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

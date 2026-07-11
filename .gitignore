@@ -1,4 +1,3 @@
-.zig-cache
-test-zig
-zig-out
-result
+/target
+/result
+/dist

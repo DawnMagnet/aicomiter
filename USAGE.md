@@ -1,78 +1,34 @@
 # aicomiter Usage
 
-This guide focuses on day-to-day usage.
-
-## Build
+## Initialize
 
 ```bash
-zig build -Doptimize=ReleaseSafe
+aicomiter init
 ```
 
-Use the built binary:
+This creates `~/.aicomiter.yaml` without overwriting an existing file. Add the selected provider's API key before generating a message.
 
-```bash
-./zig-out/bin/aicomiter
-```
-
-## Initialize Configuration
-
-```bash
-./zig-out/bin/aicomiter init
-```
-
-Then edit `~/.aicomiter.yaml` and set `ai.api_key`.
-
-## Basic Flow
+## Generate
 
 ```bash
 git add -A
-./zig-out/bin/aicomiter generate
+aicomiter generate
 ```
 
-Copy the output and commit manually, or use `--commit`.
-
-## Common Commands
-
-Generate one message:
+Useful variants:
 
 ```bash
-./zig-out/bin/aicomiter gen
+aicomiter gen -c 3
+aicomiter gen -l zh
+aicomiter gen --all
+aicomiter gen --all --commit
+aicomiter gen --all --push
 ```
 
-Generate three suggestions:
+Pass provider settings for one invocation:
 
 ```bash
-./zig-out/bin/aicomiter gen -c 3
-```
-
-Use Chinese output:
-
-```bash
-./zig-out/bin/aicomiter gen -l zh
-```
-
-Stage all changes before generating:
-
-```bash
-./zig-out/bin/aicomiter gen --all
-```
-
-Generate and auto-commit:
-
-```bash
-./zig-out/bin/aicomiter gen --all --commit
-```
-
-Generate, auto-commit, and push:
-
-```bash
-./zig-out/bin/aicomiter gen --all --commit --push
-```
-
-## Override by CLI Flags
-
-```bash
-./zig-out/bin/aicomiter gen \
+aicomiter gen \
   --provider openai \
   --api-key sk-xxx \
   --model gpt-4o-mini \
@@ -84,37 +40,19 @@ Generate, auto-commit, and push:
   --count 1
 ```
 
-## show-config
-
-Show current config:
+## Inspect Configuration
 
 ```bash
-./zig-out/bin/aicomiter show-config
+aicomiter show-config
+aicomiter show-config --format json
+aicomiter show-config --config ./experiment.yaml
 ```
 
-Show JSON output:
-
-```bash
-./zig-out/bin/aicomiter show-config --format json
-```
+The API key is always redacted. Unknown YAML fields and out-of-range numeric values fail before an API request is made.
 
 ## Troubleshooting
 
-Missing API key:
-
-- Ensure `ai.api_key` is set in `~/.aicomiter.yaml`
-- Or pass `--api-key`
-- Or set `AICOMITER_AI_API_KEY`
-
-No staged changes:
-
-```bash
-git add -A
-./zig-out/bin/aicomiter gen
-```
-
-Network/API errors:
-
-- Check internet connectivity
-- Check provider endpoint and API key
-- Increase timeout with `--timeout`
+- No staged changes: run `git add -A` or pass `--all`.
+- Missing API key: set it in YAML, `AICOMITER_AI_API_KEY`, or `--api-key`.
+- Provider errors: verify `base_url`, credentials, model access, and increase `--timeout` when appropriate.
+- Oversized diff: split the staged changes into smaller commits; input is limited to 1 MiB.

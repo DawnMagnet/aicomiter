@@ -1,0 +1,110 @@
+version: 2
+
+project_name: aicomiter
+
+before:
+  hooks:
+    - cargo +1.97.0 test --all-targets --locked
+
+builds:
+  - id: linux-musl
+    builder: rust
+    command: zigbuild
+    binary: aicomiter
+    targets:
+      - x86_64-unknown-linux-musl
+      - aarch64-unknown-linux-musl
+    flags:
+      - --release
+      - --locked
+
+  - id: macos
+    builder: rust
+    command: zigbuild
+    binary: aicomiter
+    targets:
+      - x86_64-apple-darwin
+      - aarch64-apple-darwin
+    flags:
+      - --release
+      - --locked
+
+  - id: windows
+    builder: rust
+    command: zigbuild
+    binary: aicomiter
+    targets:
+      - x86_64-pc-windows-gnu
+      - aarch64-pc-windows-gnullvm
+    flags:
+      - --release
+      - --locked
+    env:
+      - RUSTFLAGS=-C target-feature=+crt-static
+
+archives:
+  - id: install-archives
+    ids:
+      - linux-musl
+      - macos
+      - windows
+    formats:
+      - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}macOS{{ else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}
+    files:
+      - README.md
+      - USAGE.md
+      - LICENSE
+
+  - id: executables
+    ids:
+      - linux-musl
+      - macos
+      - windows
+    formats:
+      - binary
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- if eq .Os "darwin" }}macOS{{ else }}{{ .Os }}{{ end }}_
+      {{- if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}
+
+nfpms:
+  - id: linux-packages
+    ids:
+      - linux-musl
+    package_name: aicomiter
+    vendor: aicomiter contributors
+    homepage: https://github.com/sgpublic/aicomiter
+    maintainer: aicomiter contributors
+    description: Generate conventional Git commit messages with AI
+    license: MIT
+    bindir: /usr/bin
+    formats:
+      - apk
+      - archlinux
+      - deb
+      - rpm
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^chore:'
+      - '^ci:'
+
+release:
+  draft: false
+  prerelease: auto

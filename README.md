@@ -1,106 +1,54 @@
 # aicomiter
 
-A CLI tool that generates Git commit messages from staged changes using AI providers.
-
-Single binary, no third-party runtime library dependencies, and under 500KB in the Nix release build.
+`aicomiter` generates conventional Git commit messages from staged changes using OpenAI-compatible or Anthropic APIs. It is a structured Rust 1.97 CLI with strict configuration validation and no language runtime dependency.
 
 ## Features
 
-- Generate commit messages from `git diff --cached`
-- Support multiple providers: OpenAI and Anthropic
-- Support configurable model parameters
-- Support multiple output candidates (`--count`)
-- Support language selection (`--language`)
-- Support config from file, environment variables, and CLI flags
-- Optional automation: stage all (`--all`), commit (`--commit`), push (`--push`)
-- No third-party runtime library dependencies (single Zig binary)
-- Small release binary size: Nix output is typically <500KB
-
-## Requirements
-
-- Zig 0.15.2+
-- Git
-- API key for OpenAI or Anthropic
+- OpenAI and Anthropic providers
+- Multiple candidates with `--count`
+- YAML, environment, and CLI configuration layers
+- Automatic staging, committing, and pushing
+- API keys redacted from configuration output
+- Bounded Git diff input and HTTP request timeouts
 
 ## Build
 
-```bash
-zig build -Doptimize=ReleaseSafe
-```
-
-Binary path:
+Rust 1.97.0 is pinned by `rust-toolchain.toml`:
 
 ```bash
-./zig-out/bin/aicomiter
+cargo build --release --locked
+./target/release/aicomiter --help
 ```
 
 ## Quick Start
 
-1. Initialize config:
-
 ```bash
-./zig-out/bin/aicomiter init
-```
-
-2. Edit `~/.aicomiter.yaml` and set your API key.
-
-3. Stage changes and generate message:
-
-```bash
+cargo run -- init
+# Edit ~/.aicomiter.yaml, then:
 git add -A
-./zig-out/bin/aicomiter generate
+cargo run -- generate
 ```
 
-## Commands
+Common operations:
 
 ```bash
-aicomiter init
-aicomiter generate | aicomiter gen
-aicomiter show-config
-aicomiter help
+aicomiter gen --count 3 --language zh
+aicomiter gen --all --commit
+aicomiter gen --all --push
+aicomiter show-config --format json
 ```
 
-## Common Usage
-
-Generate one message:
-
-```bash
-./zig-out/bin/aicomiter gen
-```
-
-Generate multiple suggestions:
-
-```bash
-./zig-out/bin/aicomiter gen --count 3
-```
-
-Generate Chinese message:
-
-```bash
-./zig-out/bin/aicomiter gen --language zh
-```
-
-Stage all changes before generation:
-
-```bash
-./zig-out/bin/aicomiter gen --all
-```
-
-Auto-commit and push:
-
-```bash
-./zig-out/bin/aicomiter gen --all --commit --push
-```
+`--push` implies `--commit`; when multiple candidates are returned, the first is used for an automatic commit.
 
 ## Configuration
 
-Default config file: `~/.aicomiter.yaml`
+The default file is `~/.aicomiter.yaml`. Use `--config PATH` to load another file.
 
 ```yaml
 ai:
   provider: openai
   api_key: sk-xxx
-  base_url: https://api.openai.com/v1
+  base_url: null
   model: gpt-4o-mini
   temperature: 0.7
   top_p: 1.0
@@ -112,7 +60,14 @@ generate:
   count: 1
 ```
 
-## Environment Variables
+Configuration priority, highest first:
+
+1. CLI flags
+2. Environment variables
+3. YAML file
+4. Built-in defaults
+
+Environment variables:
 
 - `AICOMITER_AI_PROVIDER`
 - `AICOMITER_AI_API_KEY`
@@ -120,41 +75,35 @@ generate:
 - `AICOMITER_AI_MODEL`
 - `AICOMITER_GENERATE_LANGUAGE`
 
-Compatibility variables:
+Compatibility aliases include `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_BASE`, `API_BASE_URL`, `API_KEY`, and `MODEL`.
 
-- `API_KEY`
-- `MODEL`
-
-## Config Priority
-
-From highest to lowest:
-
-1. CLI flags
-2. Environment variables
-3. Config file
-4. Defaults
-
-## Nix
-
-Build with Nix:
+## Development
 
 ```bash
-nix build
-./result/bin/aicomiter --help
+cargo fmt --all -- --check
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test --all-targets
 ```
 
-Current measured size:
+## Releases
 
-- `./result/bin/aicomiter`: 267KB
+Tagged releases are built and packaged by GoReleaser. Release assets include:
 
-## Project Structure
+- statically linked MUSL executables for Linux x86_64 and arm64
+- native executables for macOS x86_64 and Apple Silicon
+- statically linked Windows executables for x86_64 and arm64
+- `tar.gz` installers for Linux and macOS, and `zip` installers for Windows
+- Linux `deb`, `rpm`, `apk`, and Arch Linux packages
+- SHA-256 checksums for all published artifacts
 
-- `src/main.zig`: command dispatch and flow
-- `src/cli.zig`: CLI parsing
-- `src/config.zig`: config loading and overrides
-- `src/git.zig`: git command wrapper
-- `src/ai.zig`: provider requests and response parsing
-- `src/util.zig`: utility helpers
+To validate or create a local snapshot, install GoReleaser v2, Zig, and `cargo-zigbuild`, then run:
+
+```bash
+goreleaser check
+goreleaser release --snapshot --clean
+```
+
+The implementation is split by responsibility across `app`, `cli`, `config`, `git`, and `ai` modules. Provider protocols are delegated to `genai`; process execution, serialization, secret storage, and CLI parsing are likewise delegated to maintained crates.
 
 ## License
 
