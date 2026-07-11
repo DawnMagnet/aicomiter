@@ -85,6 +85,97 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo test --all-targets
 ```
 
+## Nix (Flake)
+
+A `flake.nix` is provided for **deployment only** — it does not build
+from source. Instead it fetches the pre-built binaries published to the
+corresponding GitHub Release, so installation is fast and reproducible.
+
+Supported systems: `x86_64-linux`, `aarch64-linux`, `aarch64-darwin`.
+(`x86_64-darwin` binaries are also published; use the overlay with a
+nixpkgs pin ≤ 26.05 if you need that platform.)
+
+### Try it without installing
+
+```bash
+nix run github:DawnMagnet/aicomiter -- --help
+```
+
+### Install into a NixOS system
+
+```nix
+# flake.nix
+{
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    aicomiter.url = "github:DawnMagnet/aicomiter";
+  };
+
+  outputs = { self, nixpkgs, aicomiter, ... }: {
+    nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
+      system = "x86_64-linux";
+      modules = [
+        aicomiter.nixosModules.default
+        { programs.aicomiter.enable = true; }
+      ];
+    };
+  };
+}
+```
+
+### Install via Home-Manager
+
+```nix
+{
+  imports = [ aicomiter.homeManagerModules.default ];
+
+  programs.aicomiter = {
+    enable = true;
+
+    # Optional: declaratively manage ~/.aicomiter.yaml
+    settings = {
+      ai = {
+        provider = "openai";
+        api_key = "sk-…";
+        model = "gpt-4o-mini";
+        temperature = 0.4;
+      };
+      generate = {
+        language = "zh";
+        count = 1;
+      };
+    };
+  };
+}
+```
+
+Leave `settings` unset (the default) to keep `~/.aicomiter.yaml` under
+manual control via `aicomiter config`.
+
+### Use the overlay
+
+```nix
+{
+  nixpkgs.overlays = [ aicomiter.overlays.default ];
+  environment.systemPackages = [ pkgs.aicomiter ];
+}
+```
+
+### Bumping the pinned version
+
+The flake pins one version and its per-platform SHA-256 hashes. To
+upgrade:
+
+1. Update `version` in `flake.nix`.
+2. Refresh the `sha256` fields under `sources` from the release's
+   `checksums.txt`:
+
+   ```bash
+   curl -sL https://github.com/DawnMagnet/aicomiter/releases/download/vX.Y.Z/checksums.txt
+   ```
+
+3. Run `nix flake check` to verify.
+
 ## Releases
 
 Tagged releases are built and packaged by GoReleaser. Release assets include:
