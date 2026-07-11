@@ -20,7 +20,7 @@ builds:
 
   - id: macos
     builder: rust
-    command: zigbuild
+    command: build
     binary: aicomiter
     targets:
       - x86_64-apple-darwin
