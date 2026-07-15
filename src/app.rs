@@ -28,10 +28,10 @@ generate:
   count: 1
 "#;
 
-pub async fn run(cli: Cli) -> anyhow::Result<()> {
+pub fn run(cli: Cli) -> anyhow::Result<()> {
     match cli.command {
         Command::Init => init(),
-        Command::Generate(args) => generate(args).await,
+        Command::Generate(args) => generate(args),
         Command::ShowConfig(args) => show_config(args),
     }
 }
@@ -57,7 +57,7 @@ fn write_new_config(path: &Path) -> anyhow::Result<()> {
         .with_context(|| format!("failed to write {}", path.display()))
 }
 
-async fn generate(args: GenerateArgs) -> anyhow::Result<()> {
+fn generate(args: GenerateArgs) -> anyhow::Result<()> {
     let loaded = Config::load(&args.config)?;
     if args.show_config_sources {
         eprintln!(
@@ -80,7 +80,7 @@ async fn generate(args: GenerateArgs) -> anyhow::Result<()> {
         );
     }
 
-    let messages = AiClient::new(&loaded.value).generate(&diff).await?;
+    let messages = AiClient::new(&loaded.value).generate(&diff)?;
     print_messages(&messages);
 
     if args.commit || args.push {
