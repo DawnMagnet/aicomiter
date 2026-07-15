@@ -26,24 +26,24 @@
       # -------------------------------------------------------------------
       owner = "DawnMagnet";
       repo = "aicomiter";
-      version = "0.2.0";
+      version = "0.2.2";
 
       sources = {
         "x86_64-linux" = {
           asset = "aicomiter_${version}_linux_x86_64.tar.gz";
-          sha256 = "9ba2b74ba301ee779c36e18fa0744030a55a9be29cf13b9d8c8d6b932384ee04";
+          sha256 = "a329501e27f37b05b409c0e8f99efc7cc41158d0e46201571d705f0daa808ee0";
         };
         "aarch64-linux" = {
           asset = "aicomiter_${version}_linux_arm64.tar.gz";
-          sha256 = "b32f377dd5b1ce905693997fb043ca19d20ae8e280eaac83611f64a5bf9250d3";
+          sha256 = "093b43beb314b269dab623ebd0171843f5d241671beeacc5c1f9b0e39299089b";
         };
         "x86_64-darwin" = {
           asset = "aicomiter_${version}_macOS_x86_64.tar.gz";
-          sha256 = "a59a8de116335e31d8cfa82b141d12495cb00046168c9b5de433419e31eb1e0b";
+          sha256 = "221a3bb4938a2967198a6785e318146a64c3a9b97e1afab778e0cdb440553f9e";
         };
         "aarch64-darwin" = {
           asset = "aicomiter_${version}_macOS_arm64.tar.gz";
-          sha256 = "83341ce09f9ddfeba7e77b8dc9384fda5708116ca0bdf3e92b2ba4a62cccd91f";
+          sha256 = "e2172c884c2ea71cce9403cb1efaf47acde2d0bf572e8c1b94dd973712a1d590";
         };
       };
 
