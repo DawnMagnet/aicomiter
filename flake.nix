@@ -30,19 +30,19 @@
       sources = {
         "x86_64-linux" = {
           asset = "aicomiter_${version}_linux_x86_64.tar.gz";
-          sha256 = "200bd910fe9c3ff54cfd2b62a515a4d0ec68c96c7f7e59c52bb6c8c25bfcf5e9";
+          sha256 = "3cee8eb56a7a8f7f011699ca42d03729002b7e969dfaadf436532d41939a6729";
         };
         "aarch64-linux" = {
           asset = "aicomiter_${version}_linux_arm64.tar.gz";
-          sha256 = "d8167575cf051ff7d3f070e8bc0b02f465e8e41682a23b2cb16904006ae95721";
+          sha256 = "9fab7e3e8df5f5984056b17eb9d01aa8e2c99a67747389c11ab101b07bfcb4f4";
         };
         "x86_64-darwin" = {
           asset = "aicomiter_${version}_macOS_x86_64.tar.gz";
-          sha256 = "d0c69bda8dc6e1eae6c692dc761b4b4580f41e28d38bdfe59b91bfc09af17e04";
+          sha256 = "71cf2235970e3c69dacf0e6bef508e2ee6488b30de7956a1b6e88577660875f5";
         };
         "aarch64-darwin" = {
           asset = "aicomiter_${version}_macOS_arm64.tar.gz";
-          sha256 = "b53415ec549358aca27a5169c9d6aa4aea09038b9f0360662198901513114146";
+          sha256 = "a69b1422317403e82338db2a0d345ed7f3bc79a6daeb22abe5036524b95347d4";
         };
       };
 
