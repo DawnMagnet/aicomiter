@@ -229,18 +229,20 @@ manual control via `aicomiter config`.
 
 ### Bumping the pinned version
 
-The flake pins one version and its per-platform SHA-256 hashes. To
-upgrade:
+The release workflow automatically updates the pinned version's
+per-platform SHA-256 hashes after GoReleaser publishes the assets. To
+prepare a release:
 
-1. Update `version` in `flake.nix`.
-2. Refresh the `sha256` fields under `sources` from the release's
-   `checksums.txt`:
+1. Update the package version in `Cargo.toml` and `Cargo.lock`.
+2. Update `version` in `flake.nix` to the same value.
+3. Push the version commit and a matching tag, for example
+   `git push origin main v0.2.3`.
+4. The `update-flake-hashes` job downloads the release's `checksums.txt`,
+   updates the four flake hashes, validates the flake, and commits the
+   change to `main`.
 
-   ```bash
-   curl -sL https://github.com/DawnMagnet/aicomiter/releases/download/vX.Y.Z/checksums.txt
-   ```
-
-3. Run `nix flake check` to verify.
+The hash update job only runs for published tag releases, not for
+workflow-dispatch snapshot builds or ordinary pushes to `main`.
 
 ## Releases
 

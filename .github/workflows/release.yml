@@ -59,3 +59,78 @@ jobs:
           args: release --clean ${{ github.event_name == 'workflow_dispatch' && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  update-flake-hashes:
+    if: needs.release.result == 'success' && startsWith(github.ref, 'refs/tags/v')
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7.0.0
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Download release checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${VERSION#v}"
+          gh release download "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern checksums.txt \
+            --output "$RUNNER_TEMP/checksums.txt"
+          grep -q "aicomiter_${version}_linux_x86_64.tar.gz" "$RUNNER_TEMP/checksums.txt"
+          grep -q "aicomiter_${version}_linux_arm64.tar.gz" "$RUNNER_TEMP/checksums.txt"
+          grep -q "aicomiter_${version}_macOS_x86_64.tar.gz" "$RUNNER_TEMP/checksums.txt"
+          grep -q "aicomiter_${version}_macOS_arm64.tar.gz" "$RUNNER_TEMP/checksums.txt"
+
+      - name: Update flake hashes
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${VERSION#v}"
+          checksums="$RUNNER_TEMP/checksums.txt"
+
+          checksum_for() {
+            local asset="$1"
+            awk -v asset="$asset" '$2 == asset { print $1; exit }' "$checksums"
+          }
+
+          replace_hash() {
+            local asset="$1"
+            local hash="$2"
+            test "${#hash}" -eq 64
+            ASSET="$asset" HASH="$hash" perl -0pi -e '
+              my $asset = quotemeta($ENV{ASSET});
+              s/(asset = "${asset}";\n\s+sha256 = ")[^"]+("\s*;)/$1$ENV{HASH}$2/;
+            ' flake.nix
+          }
+
+          grep -q "version = \"$version\";" flake.nix
+          replace_hash 'aicomiter_${version}_linux_x86_64.tar.gz' \
+            "$(checksum_for "aicomiter_${version}_linux_x86_64.tar.gz")"
+          replace_hash 'aicomiter_${version}_linux_arm64.tar.gz' \
+            "$(checksum_for "aicomiter_${version}_linux_arm64.tar.gz")"
+          replace_hash 'aicomiter_${version}_macOS_x86_64.tar.gz' \
+            "$(checksum_for "aicomiter_${version}_macOS_x86_64.tar.gz")"
+          replace_hash 'aicomiter_${version}_macOS_arm64.tar.gz' \
+            "$(checksum_for "aicomiter_${version}_macOS_arm64.tar.gz")"
+
+      - name: Validate and commit flake update
+        run: |
+          set -euo pipefail
+          nix flake check --no-write-lock-file
+          if git diff --quiet -- flake.nix; then
+            echo "flake hashes are already current"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add flake.nix
+          git commit -m "chore: update flake hashes for ${GITHUB_REF_NAME}"
+          git push origin HEAD:main

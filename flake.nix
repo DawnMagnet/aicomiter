@@ -19,10 +19,9 @@
       # This flake does NOT build aicomiter from source. Instead, it pulls
       # the pre-built binaries published by goreleaser to GitHub Releases.
       #
-      # When bumping the version:
-      #   1) update `version` below,
-      #   2) refresh every entry in `sources` with the new sha256, e.g.
-      #        curl -sL https://github.com/DawnMagnet/aicomiter/releases/download/vX.Y.Z/checksums.txt
+      # When bumping the version, update Cargo.toml, Cargo.lock, and `version`
+      # below. The release workflow refreshes the source hashes after the
+      # corresponding GitHub release assets are published.
       # -------------------------------------------------------------------
       owner = "DawnMagnet";
       repo = "aicomiter";
