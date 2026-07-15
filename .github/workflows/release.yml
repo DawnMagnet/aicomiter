@@ -121,6 +121,8 @@ jobs:
           replace_hash 'aicomiter_${version}_macOS_arm64.tar.gz' \
             "$(checksum_for "aicomiter_${version}_macOS_arm64.tar.gz")"
 
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
       - name: Validate and commit flake update
         run: |
           set -euo pipefail
