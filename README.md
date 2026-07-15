@@ -47,7 +47,10 @@ The default file is `~/.aicomiter.yaml`. Use `--config PATH` to load another fil
 ```yaml
 ai:
   provider: openai
-  api_key: sk-xxx
+  # Set exactly one of these credential sources:
+  # api_key: sk-xxx
+  api_key_env: OPENAI_API_KEY
+  # api_key_file: /run/secrets/openai_api_key
   base_url: null
   model: gpt-4o-mini
   temperature: 0.7
@@ -75,7 +78,9 @@ Environment variables:
 - `AICOMITER_AI_MODEL`
 - `AICOMITER_GENERATE_LANGUAGE`
 
-Compatibility aliases include `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_BASE`, `API_BASE_URL`, `API_KEY`, and `MODEL`.
+Use exactly one of `ai.api_key` (a plaintext key), `ai.api_key_env` (the name of an environment variable), or `ai.api_key_file` (a file containing the key). If all three are omitted, aicomiter reads `AICOMITER_AI_API_KEY` by default.
+
+Compatibility aliases include `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_BASE`, `API_BASE_URL`, `API_KEY`, and `MODEL`. The API-key aliases are only used when no credential source is configured.
 
 ## Development
 

@@ -12,8 +12,11 @@ ai:
   # Provider under test: openai | anthropic
   provider: openai
 
-  # Secret credential for selected provider
-  api_key: sk-your-api-key-here
+  # Set exactly one credential source. When all are omitted, the
+  # AICOMITER_AI_API_KEY environment variable is used.
+  # api_key: sk-your-api-key-here
+  # api_key_env: OPENAI_API_KEY
+  # api_key_file: /run/secrets/openai_api_key
 
   # Optional endpoint override for proxy/self-hosted gateways
   # base_url: https://api.openai.com/v1
@@ -46,7 +49,7 @@ generate:
 # Profile A: Stable production-like
 # ai:
 #   provider: openai
-#   api_key: sk-xxx
+#   api_key_env: OPENAI_API_KEY
 #   model: gpt-4o-mini
 #   temperature: 0.4
 #   top_p: 1.0
@@ -59,7 +62,7 @@ generate:
 # Profile B: Exploratory brainstorming
 # ai:
 #   provider: anthropic
-#   api_key: sk-ant-xxx
+#   api_key_file: /run/secrets/anthropic_api_key
 #   model: claude-3-5-sonnet-20241022
 #   temperature: 1.0
 #   top_p: 1.0

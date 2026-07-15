@@ -68,3 +68,77 @@ fn invalid_float_range_is_rejected_by_domain_validation() {
             "ai.temperature must be between 0 and 2",
         ));
 }
+
+#[test]
+fn named_environment_key_source_is_accepted_and_redacted() {
+    let temp = tempdir().unwrap();
+    let config = temp.path().join("config.yaml");
+    fs::write(&config, "ai:\n  api_key_env: TEST_AICOMITER_API_KEY\n").unwrap();
+
+    Command::cargo_bin("aicomiter")
+        .unwrap()
+        .env_clear()
+        .env("TEST_AICOMITER_API_KEY", "environment-secret")
+        .args([
+            "show-config",
+            "--config",
+            config.to_str().unwrap(),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("TEST_AICOMITER_API_KEY"))
+        .stdout(predicate::str::contains("environment-secret").not())
+        .stdout(predicate::str::contains("***hidden***"));
+}
+
+#[test]
+fn file_key_source_is_accepted_trimmed_and_redacted() {
+    let temp = tempdir().unwrap();
+    let key_file = temp.path().join("api-key");
+    let config = temp.path().join("config.yaml");
+    fs::write(&key_file, " file-secret\n").unwrap();
+    fs::write(
+        &config,
+        format!("ai:\n  api_key_file: {}\n", key_file.display()),
+    )
+    .unwrap();
+
+    Command::cargo_bin("aicomiter")
+        .unwrap()
+        .env_clear()
+        .args([
+            "show-config",
+            "--config",
+            config.to_str().unwrap(),
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(key_file.to_str().unwrap()))
+        .stdout(predicate::str::contains("file-secret").not())
+        .stdout(predicate::str::contains("***hidden***"));
+}
+
+#[test]
+fn conflicting_credential_sources_are_rejected_before_execution() {
+    let temp = tempdir().unwrap();
+    let config = temp.path().join("config.yaml");
+    fs::write(
+        &config,
+        "ai:\n  api_key: plaintext-secret\n  api_key_env: TEST_AICOMITER_API_KEY\n",
+    )
+    .unwrap();
+
+    Command::cargo_bin("aicomiter")
+        .unwrap()
+        .env_clear()
+        .args(["show-config", "--config", config.to_str().unwrap()])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "only one of ai.api_key, ai.api_key_env, and ai.api_key_file may be set",
+        ));
+}

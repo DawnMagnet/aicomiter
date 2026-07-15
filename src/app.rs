@@ -12,7 +12,10 @@ use crate::{
 const CONFIG_TEMPLATE: &str = r#"# aicomiter configuration
 ai:
   provider: openai
-  api_key: ""
+  # Set exactly one of api_key, api_key_env, or api_key_file.
+  # When all are omitted, AICOMITER_AI_API_KEY is used.
+  # api_key_env: OPENAI_API_KEY
+  # api_key_file: /run/secrets/openai_api_key
   base_url: null
   model: null
   temperature: 0.7
@@ -73,7 +76,7 @@ async fn generate(args: GenerateArgs) -> anyhow::Result<()> {
     }
     if !loaded.value.has_api_key() {
         bail!(
-            "API key is required; configure ai.api_key, set AICOMITER_AI_API_KEY, or pass --api-key"
+            "API key is required; configure ai.api_key, ai.api_key_env, or ai.api_key_file; set AICOMITER_AI_API_KEY; or pass --api-key"
         );
     }
 

@@ -195,7 +195,10 @@
                 {
                   ai = {
                     provider = "openai";
-                    api_key = "sk-...";
+                    # Choose exactly one credential source:
+                    # api_key = "sk-...";
+                    api_key_env = "OPENAI_API_KEY";
+                    # api_key_file = "/run/secrets/openai_api_key";
                     model = "gpt-4o-mini";
                     temperature = 0.4;
                   };
@@ -206,9 +209,11 @@
                 }
               '';
               description = ''
-                Contents written to `~/.aicomiter.yaml`. Set to `null`
-                (default) to leave the configuration file unmanaged so it
-                can be edited by hand or via `aicomiter config`.
+                Contents written to `~/.aicomiter.yaml`. For AI credentials,
+                choose exactly one of `ai.api_key`, `ai.api_key_env`, or
+                `ai.api_key_file`. Set to `null` (default) to leave the
+                configuration file unmanaged so it can be edited by hand or
+                via `aicomiter config`.
               '';
             };
           };

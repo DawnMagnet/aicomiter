@@ -6,7 +6,7 @@
 aicomiter init
 ```
 
-This creates `~/.aicomiter.yaml` without overwriting an existing file. Add the selected provider's API key before generating a message.
+This creates `~/.aicomiter.yaml` without overwriting an existing file. Configure one API-key source before generating a message: `ai.api_key`, `ai.api_key_env`, or `ai.api_key_file`. If none is configured, `AICOMITER_AI_API_KEY` is used.
 
 ## Generate
 
@@ -53,6 +53,6 @@ The API key is always redacted. Unknown YAML fields and out-of-range numeric val
 ## Troubleshooting
 
 - No staged changes: run `git add -A` or pass `--all`.
-- Missing API key: set it in YAML, `AICOMITER_AI_API_KEY`, or `--api-key`.
+- Missing API key: configure one of `ai.api_key`, `ai.api_key_env`, or `ai.api_key_file`; set `AICOMITER_AI_API_KEY`; or pass `--api-key`.
 - Provider errors: verify `base_url`, credentials, model access, and increase `--timeout` when appropriate.
 - Oversized diff: split the staged changes into smaller commits; input is limited to 1 MiB.
