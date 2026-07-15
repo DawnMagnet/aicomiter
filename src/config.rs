@@ -1,6 +1,5 @@
 use std::{env, fs, path::PathBuf};
 
-use directories::UserDirs;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -314,7 +313,10 @@ struct RedactedAiConfig<'a> {
 }
 
 pub fn default_path() -> Option<PathBuf> {
-    UserDirs::new().map(|dirs| dirs.home_dir().join(CONFIG_FILE))
+    env::var_os("HOME")
+        .or_else(|| env::var_os("USERPROFILE"))
+        .map(PathBuf::from)
+        .map(|home| home.join(CONFIG_FILE))
 }
 
 fn first_value(names: &[&str], get_env: &dyn Fn(&str) -> Option<String>) -> Option<String> {
