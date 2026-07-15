@@ -14,7 +14,7 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.0
       - name: Install Rust 1.97.0
         run: rustup toolchain install 1.97.0 --profile minimal --component rustfmt,clippy
       - run: cargo +1.97.0 fmt --all -- --check
@@ -26,7 +26,7 @@ jobs:
     needs: quality
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.0
         with:
           fetch-depth: 0
       - name: Install Rust 1.97.0
@@ -41,15 +41,15 @@ jobs:
           x86_64-pc-windows-gnu
           aarch64-pc-windows-gnullvm
           --toolchain 1.97.0
-      - uses: mlugg/setup-zig@v2
+      - uses: mlugg/setup-zig@v2.2.1
         with:
-          version: 0.15.2
+          version: 0.16.0
       - name: Install cargo-zigbuild
-        run: cargo +1.97.0 install cargo-zigbuild --locked
-      - uses: goreleaser/goreleaser-action@v6
+        run: cargo +1.97.0 install cargo-zigbuild --version 0.23.0 --locked
+      - uses: goreleaser/goreleaser-action@v7.2.3
         with:
           distribution: goreleaser
-          version: "~> v2"
+          version: "2.17.0"
           args: release --clean ${{ github.event_name == 'workflow_dispatch' && '--snapshot' || '' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
