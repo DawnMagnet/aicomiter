@@ -23,6 +23,12 @@ aicomiter gen -l zh
 aicomiter gen --all
 aicomiter gen --all --commit
 aicomiter gen --all --push
+# Use a built-in template or custom template text
+aicomiter gen --template conventional
+aicomiter gen --template "{type}({scope}): {subject}"
+aicomiter gen --template semantic-release
+aicomiter gen --template jira
+aicomiter gen --template linux
 ```
 
 Pass provider settings for one invocation:
@@ -49,6 +55,28 @@ aicomiter show-config --config ./experiment.yaml
 ```
 
 The API key is always redacted. Unknown YAML fields and out-of-range numeric values fail before an API request is made.
+
+## Message Templates
+
+`generate.template` is optional. It can be set in YAML, with `AICOMITER_GENERATE_TEMPLATE`, or with `--template`; the precedence is CLI, environment, YAML, then the disabled default.
+
+Available built-ins:
+
+| Template | Use it for |
+| --- | --- |
+| `conventional` | Standard Conventional Commits; aliases `default`, `conventional-commits` |
+| `angular` | Angular commit convention |
+| `semantic-release` | Commits that drive semantic versioning; alias `semantic` |
+| `gitmoji` / `emoji` | Emoji-led commit subjects |
+| `simple` / `imperative` | Short subject-only messages |
+| `descriptive` | Subject plus an optional explanatory body |
+| `github` | GitHub-oriented subject and body; alias `github-pr` |
+| `jira` | Issue-key-aware messages; aliases `ticket`, `jira-smart-commit` |
+| `linux` | Linux kernel style; alias `kernel` |
+| `keep-a-changelog` | Changelog categories; alias `changelog` |
+| `release` | Release preparation commits; aliases `release-note`, `release-notes` |
+
+For project-specific preferences, use a custom template. Placeholders are `{type}`, `{scope}`, `{subject}`, `{body}`, and `{breaking}`. Built-ins give the model strong convention-specific instructions; custom templates are softer guidance, so the model may adapt or omit parts when the diff calls for it. Review the final message before `--commit` or `--push`.
 
 ## Troubleshooting
 

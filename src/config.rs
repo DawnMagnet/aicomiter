@@ -53,6 +53,8 @@ impl Default for AiConfig {
 pub struct GenerateConfig {
     pub language: String,
     pub count: u8,
+    /// Built-in template name or custom template text.
+    pub template: Option<String>,
 }
 
 impl Default for GenerateConfig {
@@ -60,6 +62,7 @@ impl Default for GenerateConfig {
         Self {
             language: "en".into(),
             count: 1,
+            template: None,
         }
     }
 }
@@ -199,6 +202,11 @@ impl Config {
         if let Some(value) = first_value(&["AICOMITER_GENERATE_LANGUAGE"], get_env) {
             self.generate.language = value;
         }
+        set_first_option_with(
+            &mut self.generate.template,
+            &["AICOMITER_GENERATE_TEMPLATE"],
+            get_env,
+        );
     }
 
     fn apply_cli(&mut self, args: &ConfigArgs) {
@@ -220,6 +228,7 @@ impl Config {
         if let Some(value) = &args.language {
             self.generate.language.clone_from(value);
         }
+        assign(&mut self.generate.template, &args.template);
         assign_copy(&mut self.generate.count, args.count);
     }
 
@@ -265,6 +274,24 @@ impl Config {
             return Err(ConfigError::Validation(
                 "generate.language cannot be empty".into(),
             ));
+        }
+        if self
+            .generate
+            .template
+            .as_deref()
+            .is_some_and(|template| template.trim().is_empty())
+        {
+            return Err(ConfigError::Validation(
+                "generate.template cannot be empty".into(),
+            ));
+        }
+        if self.generate.template.as_deref().is_some_and(|template| {
+            template.chars().count() > crate::message_template::MAX_TEMPLATE_LENGTH
+        }) {
+            return Err(ConfigError::Validation(format!(
+                "generate.template cannot exceed {} characters",
+                crate::message_template::MAX_TEMPLATE_LENGTH
+            )));
         }
         Ok(())
     }
@@ -502,7 +529,7 @@ mod tests {
 
     #[test]
     fn environment_overrides_non_secret_file_values() {
-        let mut config = config(
+        let mut configured = config(
             "ai:\n  provider: openai\n  base_url: https://configured.example\n  model: configured-model\ngenerate:\n  language: en\n",
         );
         let get_env = environment(&[
@@ -512,23 +539,31 @@ mod tests {
             ("AICOMITER_GENERATE_LANGUAGE", "zh"),
         ]);
 
-        config.apply_environment_with(&get_env);
+        configured.apply_environment_with(&get_env);
 
-        assert_eq!(config.ai.provider, Provider::Anthropic);
+        assert_eq!(configured.ai.provider, Provider::Anthropic);
         assert_eq!(
-            config.ai.base_url.as_deref(),
+            configured.ai.base_url.as_deref(),
             Some("https://environment.example")
         );
-        assert_eq!(config.ai.model.as_deref(), Some("environment-model"));
-        assert_eq!(config.generate.language, "zh");
+        assert_eq!(configured.ai.model.as_deref(), Some("environment-model"));
+        assert_eq!(configured.generate.language, "zh");
+
+        let mut template_config = config("generate:\n  template: simple\n");
+        template_config
+            .apply_environment_with(&environment(&[("AICOMITER_GENERATE_TEMPLATE", "angular")]));
+        assert_eq!(
+            template_config.generate.template.as_deref(),
+            Some("angular")
+        );
     }
 
     #[test]
     fn cli_values_override_environment_and_file_values() {
-        let mut config = config(
+        let mut configured = config(
             "ai:\n  provider: openai\n  api_key: file-secret\n  base_url: https://configured.example\n  model: configured-model\n  temperature: 0.1\ngenerate:\n  language: en\n  count: 1\n",
         );
-        config.apply_environment_with(&environment(&[
+        configured.apply_environment_with(&environment(&[
             ("AICOMITER_AI_PROVIDER", "anthropic"),
             ("AICOMITER_AI_BASE_URL", "https://environment.example"),
             ("AICOMITER_AI_MODEL", "environment-model"),
@@ -540,19 +575,55 @@ mod tests {
             model: Some("cli-model".into()),
             temperature: Some(0.9),
             language: Some("ja".into()),
+            template: Some("{type}: {subject}".into()),
             count: Some(3),
             ..ConfigArgs::default()
         };
 
-        config.apply_cli(&args);
+        configured.apply_cli(&args);
 
-        assert_eq!(config.ai.provider, Provider::Openai);
-        assert_eq!(config.ai.api_key.expose_secret(), "cli-secret");
-        assert_eq!(config.ai.base_url.as_deref(), Some("https://cli.example"));
-        assert_eq!(config.ai.model.as_deref(), Some("cli-model"));
-        assert_eq!(config.ai.temperature, 0.9);
-        assert_eq!(config.generate.language, "ja");
-        assert_eq!(config.generate.count, 3);
+        assert_eq!(configured.ai.provider, Provider::Openai);
+        assert_eq!(configured.ai.api_key.expose_secret(), "cli-secret");
+        assert_eq!(
+            configured.ai.base_url.as_deref(),
+            Some("https://cli.example")
+        );
+        assert_eq!(configured.ai.model.as_deref(), Some("cli-model"));
+        assert_eq!(configured.ai.temperature, 0.9);
+        assert_eq!(configured.generate.language, "ja");
+        assert_eq!(
+            configured.generate.template.as_deref(),
+            Some("{type}: {subject}")
+        );
+        assert_eq!(configured.generate.count, 3);
+    }
+
+    #[test]
+    fn template_is_optional_but_empty_and_oversized_values_are_rejected() {
+        assert!(Config::default().validate().is_ok());
+
+        let mut config = Config::default();
+        config.generate.template = Some("  ".into());
+        assert!(
+            matches!(config.validate(), Err(ConfigError::Validation(message)) if message.contains("template cannot be empty"))
+        );
+
+        config.generate.template =
+            Some("x".repeat(crate::message_template::MAX_TEMPLATE_LENGTH + 1));
+        assert!(
+            matches!(config.validate(), Err(ConfigError::Validation(message)) if message.contains("cannot exceed"))
+        );
+    }
+
+    #[test]
+    fn custom_and_builtin_templates_round_trip_through_yaml() {
+        let custom = config("generate:\n  template: 'type: {type}\\nsubject: {subject}'\n");
+        assert_eq!(
+            custom.generate.template.as_deref(),
+            Some("type: {type}\\nsubject: {subject}")
+        );
+        let builtin = config("generate:\n  template: gitmoji\n");
+        assert_eq!(builtin.generate.template.as_deref(), Some("gitmoji"));
     }
 
     #[test]

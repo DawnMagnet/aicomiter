@@ -43,6 +43,9 @@ pub struct ConfigArgs {
     pub timeout: Option<u64>,
     #[arg(short, long)]
     pub language: Option<String>,
+    /// Built-in template name or custom text. See the template catalog in README.md.
+    #[arg(long, value_name = "TEMPLATE")]
+    pub template: Option<String>,
     #[arg(short, long, value_parser = clap::value_parser!(u8).range(1..=10))]
     pub count: Option<u8>,
 }

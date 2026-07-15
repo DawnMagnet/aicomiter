@@ -4,9 +4,12 @@ use secrecy::ExposeSecret;
 use serde_json::{Value, json};
 use thiserror::Error;
 
-use crate::config::{Config, Provider};
+use crate::{
+    config::{Config, Provider},
+    message_template,
+};
 
-const SYSTEM_PROMPT: &str = "You are an expert developer. Generate a concise conventional Git commit message based on the supplied diff. Return only the commit message, without markdown or explanation.";
+const SYSTEM_PROMPT: &str = "You are an expert developer. Generate a concise Git commit message based on the supplied diff. Follow explicit template requirements when provided. Return only the commit message, without markdown or explanation.";
 
 pub struct AiClient<'a> {
     config: &'a Config,
@@ -45,10 +48,7 @@ impl<'a> AiClient<'a> {
     }
 
     pub fn generate(&self, diff: &str) -> Result<Vec<String>, AiError> {
-        let prompt = format!(
-            "Write the commit message in language `{}`.\n\nGit diff:\n{diff}",
-            self.config.generate.language
-        );
+        let prompt = build_prompt(self.config, diff);
         let mut messages = Vec::with_capacity(self.config.generate.count.into());
         for _ in 0..self.config.generate.count {
             let response = self.request(&prompt)?;
@@ -86,6 +86,18 @@ impl<'a> AiClient<'a> {
             .body_mut()
             .read_json()
     }
+}
+
+fn build_prompt(config: &Config, diff: &str) -> String {
+    let mut prompt = format!(
+        "Write the commit message in language `{}`.\n",
+        config.generate.language
+    );
+    if let Some(template) = message_template::instruction(config.generate.template.as_deref()) {
+        prompt.push_str(&format!("\nTemplate requirements:\n{template}\n"));
+    }
+    prompt.push_str(&format!("\nGit diff:\n{diff}"));
+    prompt
 }
 
 fn endpoint(provider: Provider, base_url: Option<&str>) -> String {
@@ -161,6 +173,24 @@ mod tests {
                 &json!({ "content": [{ "text": "fix: test" }] })
             ),
             Some("fix: test")
+        );
+    }
+
+    #[test]
+    fn prompt_includes_configured_template_requirements() {
+        let mut config = Config::default();
+        config.generate.template = Some("{type}: {subject}".into());
+        let prompt = build_prompt(&config, "diff");
+        assert!(prompt.contains("Template requirements:"));
+        assert!(prompt.contains("{type}: {subject}"));
+    }
+
+    #[test]
+    fn prompt_without_template_keeps_default_shape() {
+        let prompt = build_prompt(&Config::default(), "diff");
+        assert_eq!(
+            prompt,
+            "Write the commit message in language `en`.\n\nGit diff:\ndiff"
         );
     }
 

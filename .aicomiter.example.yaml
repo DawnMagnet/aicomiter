@@ -45,6 +45,11 @@ generate:
   # Number of candidates returned per invocation
   count: 1
 
+  # Optional built-in: conventional | angular | semantic-release | gitmoji | emoji |
+  # simple | imperative | descriptive | github | jira | linux | keep-a-changelog | release.
+  # Or use custom text with {type}, {scope}, {subject}, {body}, {breaking}.
+  # template: conventional
+
 # ---------------- Example Profiles ----------------
 # Profile A: Stable production-like
 # ai:

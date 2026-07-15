@@ -32,6 +32,46 @@ fn custom_config_is_loaded_and_secret_is_redacted() {
 }
 
 #[test]
+fn template_can_be_selected_from_cli_and_is_shown_in_effective_config() {
+    let temp = tempdir().unwrap();
+    let config = temp.path().join("config.yaml");
+    fs::write(&config, "generate:\n  template: simple\n").unwrap();
+
+    Command::cargo_bin("aicomiter")
+        .unwrap()
+        .env_clear()
+        .args([
+            "show-config",
+            "--config",
+            config.to_str().unwrap(),
+            "--template",
+            "conventional",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("\"template\": \"conventional\""));
+}
+
+#[test]
+fn custom_template_is_accepted_from_cli() {
+    Command::cargo_bin("aicomiter")
+        .unwrap()
+        .env_clear()
+        .args([
+            "show-config",
+            "--template",
+            "{type}: {subject}",
+            "--format",
+            "json",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("{type}: {subject}"));
+}
+
+#[test]
 fn malformed_config_fails_with_context() {
     let temp = tempdir().unwrap();
     let config = temp.path().join("config.yaml");

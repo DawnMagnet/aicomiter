@@ -26,6 +26,10 @@ ai:
 generate:
   language: en
   count: 1
+  # Built-ins include conventional, angular, semantic-release, gitmoji, emoji,
+  # simple, imperative, descriptive, github, jira, linux, keep-a-changelog, release.
+  # Or provide custom text with placeholders such as {type}, {scope}, {subject}, {body}, {breaking}.
+  template: null
 "#;
 
 pub fn run(cli: Cli) -> anyhow::Result<()> {

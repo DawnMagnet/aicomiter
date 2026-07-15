@@ -10,6 +10,7 @@
 - Automatic staging, committing, and pushing
 - API keys redacted from configuration output
 - Bounded Git diff input and HTTP request timeouts
+- Optional built-in or custom commit-message templates
 
 ## Build
 
@@ -61,6 +62,8 @@ ai:
 generate:
   language: en
   count: 1
+  # Optional built-in name or custom text. See the template catalog below.
+  template: conventional
 ```
 
 Configuration priority, highest first:
@@ -77,8 +80,66 @@ Environment variables:
 - `AICOMITER_AI_BASE_URL`
 - `AICOMITER_AI_MODEL`
 - `AICOMITER_GENERATE_LANGUAGE`
+- `AICOMITER_GENERATE_TEMPLATE`
 
 Use exactly one of `ai.api_key` (a plaintext key), `ai.api_key_env` (the name of an environment variable), or `ai.api_key_file` (a file containing the key). If all three are omitted, aicomiter reads `AICOMITER_AI_API_KEY` by default.
+
+`generate.template` (or `--template`) accepts a built-in name or custom text. The selected template is added to the model instruction; it does not alter the provider request schema. When unset, the original default prompt is used.
+
+### Template Catalog
+
+| Name | Format and intended use |
+| --- | --- |
+| `conventional` | Conventional Commits 1.0: `type(scope): subject`, with standard types and `BREAKING CHANGE:` footer. Aliases: `default`, `conventional-commits`. |
+| `angular` | Angular-style `type(scope): subject` with Angular's common type vocabulary. |
+| `semantic-release` | Conventional Commits tuned for semantic-release version bumps. Alias: `semantic`. |
+| `gitmoji` | One Gitmoji followed by a Conventional Commit-style subject. |
+| `emoji` | One relevant emoji followed by a short imperative subject, without a type prefix. |
+| `simple` | Exactly one short imperative sentence. |
+| `imperative` | Present-tense imperative subject such as `Add`, `Fix`, or `Update`. |
+| `descriptive` | Clear subject plus an optional explanatory body, without a required prefix. |
+| `github` | GitHub-friendly imperative subject and optional wrapped body. Alias: `github-pr`. |
+| `jira` | Optional issue key followed by `type(scope): subject`; never invents an issue key. Aliases: `ticket`, `jira-smart-commit`. |
+| `linux` | Linux kernel style: lowercase subsystem prefix, imperative subject, optional problem/solution body. Alias: `kernel`. |
+| `keep-a-changelog` | Changelog categories such as `Added`, `Changed`, `Fixed`, or `Security`. Alias: `changelog`. |
+| `release` | Release preparation messages such as `chore(release): prepare v1.2.3`. Aliases: `release-note`, `release-notes`. |
+
+### Template Examples
+
+The following examples show one possible style for a generated message. They are illustrative, not fixed output contracts; the exact wording and structure depend on the staged diff.
+
+| Template | Example message |
+| --- | --- |
+| `conventional` | `feat(auth): add token refresh support`<br><br>`BREAKING CHANGE: refresh tokens now require rotation` |
+| `angular` | `fix(router): preserve query parameters on redirect` |
+| `semantic-release` | `feat(api): expose repository health endpoint` |
+| `gitmoji` | `✨ feat: add export support` |
+| `emoji` | `🔒 rotate expired session tokens` |
+| `simple` | `Add repository health checks` |
+| `imperative` | `Update the deployment timeout` |
+| `descriptive` | `Improve cache invalidation`<br><br>`Avoid serving stale user permissions after role changes.` |
+| `github` | `fix: handle empty pull request descriptions`<br><br>`Return a validation error before creating the pull request.` |
+| `jira` | `ACME-421: fix(auth): reject expired refresh tokens` |
+| `linux` | `net: handle malformed packet headers`<br><br>`Validate the header length before reading optional fields.` |
+| `keep-a-changelog` | `Added: support exporting audit events as JSON` |
+| `release` | `chore(release): prepare v1.4.0` |
+
+Examples:
+
+```bash
+aicomiter gen --template semantic-release
+aicomiter gen --template linux
+aicomiter gen --template jira
+```
+
+Custom templates are sent as instructions and may use `{type}`, `{scope}`, `{subject}`, `{body}`, and `{breaking}` placeholders:
+
+```yaml
+generate:
+  template: "{type}({scope}): {subject}\n\n{body}\n\nBREAKING CHANGE: {breaking}"
+```
+
+Built-in templates use strong format instructions and should be treated as the selected convention. They still guide the model rather than acting as a local parser or output validator. User-defined templates are intentionally softer: the model may fill, adapt, reorder, or omit placeholders when that produces a better message for the staged diff. Empty or whitespace-only templates are rejected, and templates are limited to 4,000 characters.
 
 Compatibility aliases include `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_BASE`, `API_BASE_URL`, `API_KEY`, and `MODEL`. The API-key aliases are only used when no credential source is configured.
 
