@@ -243,8 +243,9 @@ prepare a release:
 
 The hash update job only runs for published tag releases, not for
 ordinary pushes to `main`. To recover an already-published release after a
-workflow failure, manually dispatch the `Release` workflow with
-`update_flake_tag` set to the existing tag, for example `v0.2.3`.
+workflow failure, run the standalone `Update Flake Hashes` workflow and set
+`release_tag` to the existing tag, for example `v0.2.3`. This avoids rebuilding
+the release.
 
 ## Releases
 
