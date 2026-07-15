@@ -242,7 +242,9 @@ prepare a release:
    change to `main`.
 
 The hash update job only runs for published tag releases, not for
-workflow-dispatch snapshot builds or ordinary pushes to `main`.
+ordinary pushes to `main`. To recover an already-published release after a
+workflow failure, manually dispatch the `Release` workflow with
+`update_flake_tag` set to the existing tag, for example `v0.2.3`.
 
 ## Releases
 
